@@ -2,18 +2,18 @@ version: '2'
 
 services:
 
- freeradius:
-   image: "${REGISTRY}marcelmaatkamp/freeradius:${RADIUS_TAG:-latest}"
-  ports:
-   - "1812:1812/udp"
-   - "1813:1813"
-   - "18120:18120"
-  volumes:
-   - "./data/clients.conf:/etc/raddb/clients.conf"
-   - "./data/users:/etc/raddb/users"
-  networks:
-   authnet:
-    ipv4_address: 172.25.0.100
+# freeradius:
+#   image: "${REGISTRY}marcelmaatkamp/freeradius:${RADIUS_TAG:-latest}"
+#  ports:
+#   - "1812:1812/udp"
+#   - "1813:1813"
+#   - "18120:18120"
+#  volumes:
+#   - "./data/clients.conf:/etc/raddb/clients.conf"
+#   - "./data/users:/etc/raddb/users"
+#  networks:
+#   authnet:
+#    ipv4_address: 172.25.0.100
 
  onos:
   image: "${REGISTRY}${REPOSITORY}voltha-onos:${TAG:-latest}"
@@ -23,12 +23,14 @@ services:
    - "8181:8181" # UI
   environment:
    ONOS_APPS: 'drivers,openflow-base'
+  volumes:
+   - "../onos-config/network-cfg.json:/root/onos/config/network-cfg.json"
   networks:
     authnet:
      ipv4_address: 172.25.0.200
 
 # onos_config_push:
-#  image: "${REGISTRY}${REPOSITORY}voltha-config-push:${TAG:-latest}"
+#  image: "${REGISTRY}${REPOSITORY}voltha-config-push:latest"
 #  environment:
 #   ONOS_CONNECTION: 'onos:8181'
 #  volumes:
