@@ -360,6 +360,11 @@ class BroadcomOnuHandler(object):
             self.adapter_agent.update_device(device)
             self.disable_ports(device)
 
+        elif event_msg['event'] == 'reactivate-onu':
+            device = self.adapter_agent.get_device(self.device_id)
+            device.oper_status = OperStatus.ACTIVATING
+            self.adapter_agent.update_device(device)
+
         elif event_msg['event'] == 'ranging-completed':
 
             if event_msg['event_data']['ranging_successful'] == True:
