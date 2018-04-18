@@ -1,39 +1,44 @@
 import requests
 import json
-import logging
+import structlog
 
 
-log = logging.getLogger(__name__)
-log.setLevel(logging.DEBUG)
+log = structlog.get_logger()
 
 
-volthaIp = '127.0.0.1'
+volthaIp = 'envoy'
 
 def volthaPost(name, url, data=None):
-    r = requests.post(url, json=data)
-    if r.status_code != 200:
-        log.error("Error {} on {} POST".format(r.status_code, name))
-        exit()
-    else:
-        if r.text:
-            response = json.loads(r.text)
-            log.debug(response)
+    try:
+        r = requests.post(url, json=data)
+        if r.status_code != 200:
+            log.error("Error {} on {} POST".format(r.status_code, name))
+            exit()
         else:
-            response = None
-        return response
+            if r.text:
+                response = json.loads(r.text)
+                log.debug(response)
+            else:
+                response = None
+            return response
+    except Exception as e:
+        log.error('ATT Post error', e)
 
 def volthaGet(name, url):
-    r = requests.get(url)
-    if r.status_code != 200:
-        log.error("Error {} on {} GET".format(r.status_code, name))
-        exit()
-    else:
-        if r.text:
-            response = json.loads(r.text)
-            log.debug(response)
+    try:
+        r = requests.get(url)
+        if r.status_code != 200:
+            log.error("Error {} on {} GET".format(r.status_code, name))
+            exit()
         else:
-            response = None
-        return response
+            if r.text:
+                response = json.loads(r.text)
+                log.debug(response)
+            else:
+                response = None
+            return response
+    except Exception as e:
+        log.error('ATT Get error', e)
 
 def preprovision_olt(oltIp, oltMac, driverPort):
     response = volthaPost('preprovsion','http://{}:8882/api/v1/devices'.format(volthaIp),{"type": "asfvolt16_olt", "host_and_port": "{}:{}".format(oltIp, driverPort), "mac-address": oltMac})

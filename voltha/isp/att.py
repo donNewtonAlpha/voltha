@@ -23,7 +23,7 @@ def new_onu_detected(onuData):
     oltTag = 'defaultTag'
 
     try :
-        devices = json.loads(requests.get('127.0.0.1:8882/api/v1/devices'))['items']
+        devices = json.loads(requests.get('http://envoy:8882/api/v1/devices'))['items']
         for device in devices:
             if device['id'] == deviceId:
                 oltParentId = device['parent_id']
