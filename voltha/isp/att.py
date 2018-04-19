@@ -1,4 +1,5 @@
 from voltha.isp.onu_provisionning import add_subscriber
+from voltha.isp import voltha_config_calls
 from threading import Lock
 import requests
 import json
@@ -26,7 +27,10 @@ def new_onu_detected(onuData):
              ponId = ponId, oltParentId=oltParentId, oltTag=oltTag, rawmessage=oltMessage)
 
     try :
-        devices = json.loads(requests.get('http://envoy:8882/api/v1/devices'))['items']
+        log.debug('FOUNDRY-pre envoy devices GET call')
+        response = voltha_config_calls.volthaGet('devices', 'http://envoy:8882/api/v1/devices')
+        log.debug('FOUNDRY post devices GET', response=response)
+        devices = response['items']
         for device in devices:
             if device['id'] == deviceId:
                 oltParentId = device['parent_id']

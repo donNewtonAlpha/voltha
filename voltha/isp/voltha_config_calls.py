@@ -26,9 +26,10 @@ def volthaPost(name, url, data=None):
 
 def volthaGet(name, url):
     try:
+        log.debug('FOUNDRY GET call to url', url=url)
         r = requests.get(url)
         if r.status_code != 200:
-            log.error("Error {} on {} GET".format(r.status_code, name))
+            log.error("FOUNDRY Error {} on {} GET".format(r.status_code, name))
             exit()
         else:
             if r.text:
@@ -38,7 +39,7 @@ def volthaGet(name, url):
                 response = None
             return response
     except Exception as e:
-        log.error('ATT Get error', e)
+        log.error('FOUNDRY Get error', e)
 
 def preprovision_olt(oltIp, oltMac, driverPort):
     response = volthaPost('preprovsion','http://{}:8882/api/v1/devices'.format(volthaIp),{"type": "asfvolt16_olt", "host_and_port": "{}:{}".format(oltIp, driverPort), "mac-address": oltMac})
