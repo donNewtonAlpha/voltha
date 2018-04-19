@@ -318,6 +318,10 @@ class BroadcomOnuHandler(object):
         self.proxy_address = None
         self.tx_id = 0
 
+        self.tconts = []
+        self.gemPorts = []
+        self.activatedOnce = False
+
         # Need to query ONU for number of supported uni ports
         # For now, temporarily set number of ports to 1 - port #2
         self.uni_ports = (1, 2, 3, 4, 5)
@@ -345,6 +349,14 @@ class BroadcomOnuHandler(object):
                 device.connect_status = ConnectStatus.REACHABLE
                 device.oper_status = OperStatus.ACTIVE
                 self.adapter_agent.update_device(device)
+                if self.activatedOnce:
+                    #Reactivation case : replay Tcont and gemPort
+                    self.log.info('FOUNDRY-onu-reactivation-successful', Tconts=self.tconts, gemPorts=self.gemPorts)
+                    for tcontToReapply in self.tconts:
+                        self.create_tcont(tcontToReapply)
+                    for gemPortToReapply in self.gemPorts:
+                        self.create_gemport(gemPortToReapply)
+
 
             else:
                 device = self.adapter_agent.get_device(self.device_id)
@@ -395,6 +407,8 @@ class BroadcomOnuHandler(object):
         elif event_msg['event'] == 'create-tcont':
             tcont = TcontsConfigData()
             tcont.alloc_id = event_msg['event_data']['alloc_id']
+            #Store Tcont for reboot
+            self.tconts.append(tcont)
             self.create_tcont(tcont, traffic_descriptor_data=None)
 
         elif event_msg['event'] == 'create-venet':
@@ -405,6 +419,8 @@ class BroadcomOnuHandler(object):
         elif event_msg['event'] == 'create-gemport':
             gem_port = GemportsConfigData()
             gem_port.gemport_id = event_msg['event_data']['gemport_id']
+            #Store gem port for reboot
+            self.gemPorts.append(gem_port)
             self.create_gemport(gem_port)
 
         # Handle next event
@@ -1635,6 +1651,7 @@ class BroadcomOnuHandler(object):
             self.send_set_8021p_mapper_service_profile(0x8001,
                                                        gem_port.gemport_id)
             yield self.wait_for_response()
+            self.activatedOnce = True
 
 
     @inlineCallbacks
