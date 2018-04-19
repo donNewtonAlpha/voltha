@@ -1084,7 +1084,6 @@ class Asfvolt16Handler(OltDeviceHandler):
                           onu_id=child_device.proxy_address.onu_id)
 
 
-
         elif ind_info['_sub_group_type'] == 'sub_term_indication':
             self.log.info('ONU-activation-is-completed', olt_id=self.olt_id,
                           pon_ni=pon_id, onu_data=ind_info)
@@ -1160,6 +1159,9 @@ class Asfvolt16Handler(OltDeviceHandler):
                     self.log.error('ISP ONU auto-activation error', e, balSubTermDisc)
 
             return
+
+        self.log.info('FOUNDRY-child-device-exists', olt_id=self.olt_id,
+                      pon_ni=ind_info['_pon_id'], onu_data=ind_info, oper_status=child_device.oper_status)
 
         handler = self.onu_handlers.get(child_device.oper_status)
         if handler:
