@@ -372,8 +372,8 @@ class BroadcomOnuHandler(object):
         elif event_msg['event'] == 'reactivate-onu':
             device = self.adapter_agent.get_device(self.device_id)
             self.log.info('FOUNDRY-onu-event-reactivate-onu', old_state=device.oper_status,
-                          new_state=OperStatus.ACTIVATING)
-            device.oper_status = OperStatus.ACTIVATING
+                          new_state=OperStatus.DISCOVERED)
+            device.oper_status = OperStatus.DISCOVERED
             self.adapter_agent.update_device(device)
 
         elif event_msg['event'] == 'ranging-completed':
