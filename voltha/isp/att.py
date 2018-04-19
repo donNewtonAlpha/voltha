@@ -22,6 +22,9 @@ def new_onu_detected(onuData):
     oltParentId = DEFAULT_DPID
     oltTag = 'defaultTag'
 
+    log.info('FOUNDRY-onu-data-preparation-before-device-check', onuSerialNumber=onuSerialNumber, deviceId=deviceId,
+             ponId = ponId, oltParentId=oltParentId, oltTag=oltTag, rawmessage=oltMessage)
+
     try :
         devices = json.loads(requests.get('http://envoy:8882/api/v1/devices'))['items']
         for device in devices:
@@ -33,23 +36,26 @@ def new_onu_detected(onuData):
     #TODO: fix the source of the bug
         oltParentId[3] = '0'
     except Exception as e:
-        log.error('att onu detection error: preparation', e)
+        log.error('FOUNDRY att onu detection error: preparation', e)
         return
 
+    log.info('FOUNDRY-onu-data-preparation-after-device-check', onuSerialNumber=onuSerialNumber, deviceId=deviceId,
+             ponId=ponId, oltParentId=oltParentId, oltTag=oltTag, rawmessage=oltMessage)
+
     with lock:
+        log.debug('FOUNDRY locking before checking activated onus', activeOnus=activeOnus, serial_number=onuSerialNumber)
         if onuSerialNumber not in activeOnus:
             try:
                 add_subscriber_on_pon(deviceId, oltParentId, oltTag, onuSerialNumber, ponId, len(activeOnus) + 1)
                 activeOnus.append(onuSerialNumber)
             except Exception as e:
-                log.error('att onu detection error: provisionning calls', e)
+                log.error('FOUNDRY att onu detection error: provisionning calls', e)
 
 
 
 
 def add_subscriber_on_pon(oltDeviceId, dpid, oltTag, onuSerialNumber, ponId, onuId):
-
-
+    log.debug('FOUNDRY prepare to add subscriber on pon', deviceId=oltDeviceId, dpid=dpid, oltTag=oltTag, serialNumber=onuSerialNumber, ponId=ponId, onuId=onuId)
 
     channelPartition = getChannelPartition(oltTag, ponId)
     channelPair = getChannelPair(oltTag, ponId)
@@ -61,11 +67,15 @@ def add_subscriber_on_pon(oltDeviceId, dpid, oltTag, onuSerialNumber, ponId, onu
     vlan = 19 + onuId
     port = 256 + onuId
 
+    log.debug('FOUNDRY adding subscriber on pon', deviceId=oltDeviceId, dpid=dpid, oltTag=oltTag,
+              serialNumber=onuSerialNumber, ponId=ponId, onuId=onuId, channerPartition=channelPartition,
+              channelPair=channelPair, trafficDescriptor=trafficDescriptor, username=username, tcont=tcont,
+              enet=enet, gem = gem, vlan=vlan, onuLogivalPort=port)
+
     add_subscriber(dpid, oltTag, oltDeviceId, onuSerialNumber, onuId, trafficDescriptor, channelPartition, channelPair, username,
                         tcont, enet, gem, port, vlan)
 
-    onuId += 1
-        
+
 def getChannelGroup(tag, ponId):
     return "ChannelGroup{}-{}".format(tag, ponId)
 
