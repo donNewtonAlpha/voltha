@@ -10,7 +10,7 @@ sleep = 15
 
 def add_subscriber(dpid, oltTag, oltDeviceId, onuSerialNumber, id, trafficDescriptor, channelPartition, channelPair, username,
                    tcont, enet, gem, port, vlan):
-    log.info("Configuring subscriber with ONU {} and VLAN {} on OLT {} ({})".format(onuSerialNumber, vlan, oltDeviceId,
+    log.info("FOUNDRY Configuring subscriber with ONU {} and VLAN {} on OLT {} ({})".format(onuSerialNumber, vlan, oltDeviceId,
                                                                                     oltTag))
 
     config.create_v_ont_anis(onuSerialNumber, id, username, channelPartition, channelPair)
