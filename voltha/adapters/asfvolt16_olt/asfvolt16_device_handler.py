@@ -54,7 +54,7 @@ from voltha.protos.bbf_fiber_tcont_body_pb2 import TcontsConfigData
 from voltha.protos.bbf_fiber_gemport_body_pb2 import GemportsConfigData
 import binascii
 from argparse import ArgumentParser, ArgumentError
-from voltha.isp import att
+# from voltha.isp import att
 import shlex
 
 # The current scheme of device port numbering is below.
@@ -1152,11 +1152,11 @@ class Asfvolt16Handler(OltDeviceHandler):
                                ind_info['_pon_id'],\
                                "ONU_DISCOVERED",1,"high",\
                                balSubTermDisc)
-                try:
-                    att.new_onu_detected({"serial_number": str(serial_number), "device_id": str(self.device_id),
-                                        "pon_id": ind_info['_pon_id'], "olt_event_message" : ind_info})
-                except Exception as e:
-                    self.log.error('ISP ONU auto-activation error', e, balSubTermDisc)
+                # try:
+                #     att.new_onu_detected({"serial_number": str(serial_number), "device_id": str(self.device_id),
+                #                         "pon_id": ind_info['_pon_id'], "olt_event_message" : ind_info})
+                # except Exception as e:
+                #     self.log.error('ISP ONU auto-activation error', e, balSubTermDisc)
 
             return
 
