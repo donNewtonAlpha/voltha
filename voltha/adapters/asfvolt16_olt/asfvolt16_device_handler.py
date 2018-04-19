@@ -1038,7 +1038,8 @@ class Asfvolt16Handler(OltDeviceHandler):
         self.log.info('handle-activated-onu', olt_id=self.olt_id,
                       pon_ni=pon_id, onu_data=ind_info)
         # Check if re-activation is necessary
-        if 'activation_successful' in ind_info.keys() and ind_info['activation_successful'] is True:
+
+        if 'activation_successful' in ind_info and ind_info['activation_successful'] is True:
             # No need to re-activate
             self.log.info('**************************handle-activated-onu-REGULAR', olt_id=self.olt_id,
                           pon_ni=pon_id, onu_data=ind_info)
@@ -1052,8 +1053,7 @@ class Asfvolt16Handler(OltDeviceHandler):
             # Re-activate ONU
             self.log.info('**************************handle-activated-onu-REACTIVATED', olt_id=self.olt_id,
                           pon_ni=pon_id, onu_data=ind_info)
-            self.log.info('handle-reactivate-onu', olt_id=self.olt_id,
-                          pon_ni=ind_info['_pon_id'], onu_data=ind_info)
+
             msg = {'proxy_address': child_device.proxy_address,
                    'event': 'reactivate-onu', 'event_data': ind_info}
             # Send the event message to the ONU adapter
