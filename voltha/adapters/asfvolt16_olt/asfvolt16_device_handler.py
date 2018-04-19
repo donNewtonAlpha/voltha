@@ -1039,7 +1039,7 @@ class Asfvolt16Handler(OltDeviceHandler):
                       pon_ni=pon_id, onu_data=ind_info)
         # Check if re-activation is necessary
 
-        if 'activation_successful' in ind_info and ind_info['activation_successful'] is True:
+        if ind_info['activation_successful'] is True:
             # No need to re-activate
             self.log.info('**************************handle-activated-onu-REGULAR', olt_id=self.olt_id,
                           pon_ni=pon_id, onu_data=ind_info)
