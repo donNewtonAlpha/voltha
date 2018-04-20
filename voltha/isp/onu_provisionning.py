@@ -6,8 +6,7 @@ log = structlog.get_logger()
 from voltha.protos.bbf_fiber_base_pb2 import VOntaniConfig, VEnetConfig
 from voltha.protos.bbf_fiber_tcont_body_pb2 import TcontsConfigData
 from voltha.protos.bbf_fiber_gemport_body_pb2 import GemportsConfigData
-from voltha.protos.voltha_pb2 import CreateVOntani, CreateVEnet, CreateTcontsConfigData, CreateGemportsConfigData,\
-    VolthaGlobalServiceStub
+from voltha.protos.voltha_pb2 import VolthaGlobalServiceStub
 
 #TODO: make it clean and dicover the port through service or something
 try:
