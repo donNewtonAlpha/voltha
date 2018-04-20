@@ -62,7 +62,7 @@ def new_onu_detected(onuData):
         if onuSerialNumber not in activeOnus:
             try:
                 activeOnus.append(onuSerialNumber)
-                t = Thread(target=add_subscriber_on_pon, args=(deviceId, oltParentId, oltTag, onuSerialNumber, ponId, len(activeOnus) + 1))
+                t = Thread(target=add_subscriber_on_pon, args=(deviceId, oltParentId, oltTag, onuSerialNumber, ponId, len(activeOnus)))
                 t.start()
             except Exception as e:
                 log.error('FOUNDRY att onu detection error: provisionning calls', e)

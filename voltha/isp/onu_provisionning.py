@@ -156,7 +156,8 @@ def createGemPort(name, enet, tcont, id):
 
 
 def onosSubscriber(oltDpid, port, ctag):
-    r = requests.post('http://onos:8181/onos/olt/oltapp/of%3A{}/{}/{}'.format(oltDpid, port, ctag))
+    #TODO: discover onos ip
+    r = requests.post('http://10.64.1.101:8181/onos/olt/oltapp/of%3A{}/{}/{}'.format(oltDpid, port, ctag))
     if r.status_code != 200:
         log.error("Error {} on ONOS add subscriber POST".format(r.status_code))
         exit()
