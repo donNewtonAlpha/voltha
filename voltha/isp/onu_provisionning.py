@@ -120,8 +120,8 @@ def createVEnets(name, username):
                   alloc_id=id)
 
     try:
-        log.debug("FOUNDRY-tcont-grpc-call", config=venet_request, name=name, username=username)
-        stub.CreateTcontsConfigData(venet_request)
+        log.debug("FOUNDRY-venet-grpc-call", config=venet_request, name=name, username=username)
+        stub.CreateVEnet(venet_request)
         log.info("FOUNDRY-autodetection-venet-created", config=venet_request, name=name, username=username, alloc_id=id)
     except Exception as e:
         log.error("FOUNDRY-venet-config-grpc-call-error", exception=e, config=venet_request, name=name,
