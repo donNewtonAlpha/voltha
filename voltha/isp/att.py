@@ -45,7 +45,7 @@ def new_onu_detected(onuData):
                 log.debug('FOUNDRY-device-match-tag-found', device=device, deviceId=deviceId, dpid=oltParentId, tag=oltTag)
                 #Modification of dpid to match ONOS : bug
                 #TODO: fix the source of the bug
-                oltParentId[3] = '0'
+                oltParentId = '0000{}'.format(oltParentId[4:])
                 log.debug('FOUNDRY-device-dpid-modifcation-for-onos', device=device, deviceId=deviceId, dpid=oltParentId, tag=oltTag)
 
     except Exception as e:
