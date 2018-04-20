@@ -41,7 +41,7 @@ systemctl status kubelet
 ## allow insecure docker repos
 sudo vi /etc/docker/daemon.json
 
-INSIDE:
+## INSIDE daemon.json file
 {
   "insecure-registries":[ "docker-repo:5000" ]
 }
@@ -53,9 +53,9 @@ usermod -aG docker <non-root-user>
 ## REBOOT ##
 
 
+
 sudo kubeadm init
-### COPY RESULTS ###
-# into ~/kubeadm-setup.txt
+### COPY RESULTS into ~/kubeadm-setup.txt
 
 
 ### ROOT WORK DONE ###
@@ -80,7 +80,8 @@ kubectl -n kube-system get ds -l 'k8s-app==kube-proxy' -o json \
 kubectl taint nodes --all node-role.kubernetes.io/master-
 
 ## git clone voltha
-mkdir -p ~/source/voltha
+mkdir -p ~/source
+cd ~/source
 git clone https://github.com/donNewtonAlpha/voltha.git
 cd ~/source/voltha/k8s/
 
@@ -100,7 +101,10 @@ dig @10.96.0.10 kubernetes.default.svc.cluster.local
 dig @10.96.0.10 SRV _https._tcp.kubernetes.default.svc.cluster.local
 
 
+
+
 ### VOLTHA BEGINS ###
+
 
 kubectl apply -f namespace.yml 
 kubectl apply -f ingress/
@@ -127,22 +131,21 @@ kubectl apply -f foundry-node/fluentd.yml
 
 ls -atlrR ~/source/voltha/runtime/
 
+
+
+### VOLTHA CORE AND ACCESSORY CONTAINERS ####
+
 kubectl apply -f foundry-node/vcore_for_consul_repo.yml
 
 ## check health
 kubectl log vcore-57957b4c9b-29j4z -n voltha -f --tail=20
 kubectl exec -ti vcore-57957b4c9b-29j4z -n voltha -- /bin/sh
-
+#   exit shell back to host
 
 kubectl apply -f foundry-node/ofagent_repo.yml 
 kubectl apply -f foundry-node/envoy_for_consul_repo.yml 
 kubectl apply -f foundry-node/vcli_repo.yml 
 kubectl apply -f foundry-node/netconf_repo.yml 
-
-
-# verify
-kubectl get pods -n voltha
-
 kubectl apply -f grafana.yml 
 kubectl apply -f foundry-node/stats_repo.yml 
 
@@ -150,20 +153,25 @@ kubectl apply -f foundry-node/stats_repo.yml
 kubectl get pods -n voltha
 
 
-
 # get svc ip and connect to voltha cli
 kubectl get svc -n voltha
 ssh -p 5022 voltha@10.107.139.3
 
 
-
 ### VOLTHA CORE DONE ### 
+
 
 
 ## deploy ponsim if needed.  WARNING USES LOTS OF CPU
 
-kubectl apply -f olt_repo.yml 
-kubectl apply -f onu_repo.yml 
+kubectl apply -f foundry-node/olt_repo.yml 
+kubectl apply -f foundry-node/onu_repo.yml 
+
+
+## delete ponsim (or other resources)
+
+kubectl delete -f foundry-node/olt_repo.yml
+kubectl delete -f foundry-node/onu_repo.yml 
 
 
 
