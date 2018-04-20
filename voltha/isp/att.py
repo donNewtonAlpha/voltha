@@ -1,5 +1,6 @@
 from voltha.isp.onu_provisionning import add_subscriber
 from voltha.isp import voltha_config_calls
+from voltha.registry import registry
 from threading import Lock
 import requests
 import json
@@ -10,6 +11,8 @@ lock = Lock()
 log = structlog.get_logger()
 
 DEFAULT_DPID = "0001000000000001"
+
+proxy = registry('core').get_proxy('/')
 
 def new_onu_detected(onuData):
 
@@ -27,13 +30,13 @@ def new_onu_detected(onuData):
              ponId = ponId, oltParentId=oltParentId, oltTag=oltTag, rawmessage=oltMessage)
 
     try :
-        log.debug('FOUNDRY-pre envoy devices GET call')
-        response = voltha_config_calls.volthaGet('devices', 'http://envoy:8882/api/v1/devices')
-        log.debug('FOUNDRY post devices GET', response=response)
-        devices = response['items']
+        devicesStored = proxy.get('/devices')
+        log.info('FOUNDRY-getting-devices-from-storage', devicesStored=devicesStored)
+        devices = devicesStored['items']
         for device in devices:
             if device['id'] == deviceId:
                 oltParentId = device['parent_id']
+                #TODO: extract tag from channel termination instead
                 oltTag = device['host_and_port'].split(':')[0].split('.')[3]
 
     #Modification of dpid to match ONOS : bug
@@ -54,6 +57,8 @@ def new_onu_detected(onuData):
                 activeOnus.append(onuSerialNumber)
             except Exception as e:
                 log.error('FOUNDRY att onu detection error: provisionning calls', e)
+        else:
+            log.debug('FOUNDRY-trying-to-activate-already-activated-onu', serialNumber=onuSerialNumber, activatedOnus=activeOnus)
 
 
 
