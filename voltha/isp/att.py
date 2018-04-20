@@ -1,11 +1,13 @@
 from voltha.isp.onu_provisionning import add_subscriber
 from voltha.registry import registry
-from threading import Lock
+from threading import Lock, Thread
 import requests
 import json
 import structlog
 
+#TODO: make obsolete, get it from the database proxy
 activeOnus = []
+#TODO : Make all this asynchronous
 lock = Lock()
 log = structlog.get_logger()
 
@@ -59,8 +61,9 @@ def new_onu_detected(onuData):
         log.debug('FOUNDRY locking before checking activated onus', activeOnus=activeOnus, serial_number=onuSerialNumber)
         if onuSerialNumber not in activeOnus:
             try:
-                add_subscriber_on_pon(deviceId, oltParentId, oltTag, onuSerialNumber, ponId, len(activeOnus) + 1)
                 activeOnus.append(onuSerialNumber)
+                t = Thread(target=add_subscriber_on_pon, args=(deviceId, oltParentId, oltTag, onuSerialNumber, ponId, len(activeOnus) + 1))
+                t.start()
             except Exception as e:
                 log.error('FOUNDRY att onu detection error: provisionning calls', e)
         else:
