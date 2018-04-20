@@ -1041,7 +1041,7 @@ class Asfvolt16Handler(OltDeviceHandler):
 
         if ind_info['activation_successful'] is True:
             # No need to re-activate
-            self.log.info('**************************handle-activated-onu-REGULAR', olt_id=self.olt_id,
+            self.log.info('FOUNDRY-handle-activated-onu-REGULAR', olt_id=self.olt_id,
                           pon_ni=pon_id, onu_data=ind_info)
             msg = {'proxy_address': child_device.proxy_address,
                    'event': 'activation-completed', 'event_data': ind_info}
@@ -1051,7 +1051,7 @@ class Asfvolt16Handler(OltDeviceHandler):
                                                          msg)
         else:
             # Re-activate ONU
-            self.log.info('**************************handle-activated-onu-REACTIVATED', olt_id=self.olt_id,
+            self.log.info('FOUNDRY-handle-activated-onu-REACTIVATED', olt_id=self.olt_id,
                           pon_ni=pon_id, onu_data=ind_info)
 
             msg = {'proxy_address': child_device.proxy_address,
