@@ -1,5 +1,4 @@
 from voltha.isp.onu_provisionning import add_subscriber
-from voltha.isp import voltha_config_calls
 from voltha.registry import registry
 from threading import Lock
 import requests
@@ -10,9 +9,10 @@ activeOnus = []
 lock = Lock()
 log = structlog.get_logger()
 
-DEFAULT_DPID = "0001000000000001"
+DEFAULT_DPID = '0001000000000001'
 
-proxy = registry('core').get_proxy('/')
+core = registry('core')
+proxy = core.get_proxy('/')
 
 def new_onu_detected(onuData):
 
@@ -30,18 +30,24 @@ def new_onu_detected(onuData):
              ponId = ponId, oltParentId=oltParentId, oltTag=oltTag, rawmessage=oltMessage)
 
     try :
-        devicesStored = proxy.get('/devices')
-        log.info('FOUNDRY-getting-devices-from-storage', devicesStored=devicesStored)
-        devices = devicesStored['items']
-        for device in devices:
-            if device['id'] == deviceId:
-                oltParentId = device['parent_id']
-                #TODO: extract tag from channel termination instead
-                oltTag = device['host_and_port'].split(':')[0].split('.')[3]
+        devices = proxy.get('/devices')
+        log.info('FOUNDRY-getting-devices-from-storage', devicesStored=devices)
 
-    #Modification of dpid to match ONOS : bug
-    #TODO: fix the source of the bug
-        oltParentId[3] = '0'
+        for device in devices:
+            log.debug('FOUNDRY-checking-for device', device=device, deviceId=deviceId)
+
+            if device.id == deviceId:
+                log.debug('FOUNDRY-device-match', device=device, deviceId=deviceId)
+                oltParentId = device.parent_id
+                log.debug('FOUNDRY-device-match-dpid-found', device=device, deviceId=deviceId, dpid=oltParentId)
+                #TODO: extract tag from channel termination instead
+                oltTag = device.host_and_port.split(':')[0].split('.')[3]
+                log.debug('FOUNDRY-device-match-tag-found', device=device, deviceId=deviceId, dpid=oltParentId, tag=oltTag)
+                #Modification of dpid to match ONOS : bug
+                #TODO: fix the source of the bug
+                oltParentId[3] = '0'
+                log.debug('FOUNDRY-device-dpid-modifcation-for-onos', device=device, deviceId=deviceId, dpid=oltParentId, tag=oltTag)
+
     except Exception as e:
         log.error('FOUNDRY att onu detection error: preparation', e)
         return
