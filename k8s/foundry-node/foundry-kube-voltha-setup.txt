@@ -1,0 +1,169 @@
+#
+# Foundry Single instance voltha on kubernetes (k8s)
+# 
+# minimum 8vcpu 8gb memory, 40GB disk.  Probably needs higher
+#
+# basic install of 16.04, patched and updated
+
+apt update
+apt dist-upgrade
+reboot
+
+#
+# get docker-ce
+#
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+
+add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+apt update
+apt install docker-ce
+
+#
+# get k8s
+#
+curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
+
+cat <<EOF >/etc/apt/sources.list.d/kubernetes.list
+deb http://apt.kubernetes.io/ kubernetes-xenial main
+EOF
+
+apt update
+apt install kubelet kubeadm kubectl
+
+
+systemctl start docker
+systemctl start kubelet
+systemctl enable docker
+systemctl enable kubelet
+systemctl status docker
+systemctl status kubelet
+
+## allow insecure docker repos
+sudo vi /etc/docker/daemon.json
+
+INSIDE:
+{
+  "insecure-registries":[ "docker-repo:5000" ]
+}
+
+systemctl restart docker
+usermod -aG docker <non-root-user>
+
+
+## REBOOT ##
+
+
+sudo kubeadm init
+### COPY RESULTS ###
+# into ~/kubeadm-setup.txt
+
+
+### ROOT WORK DONE ###
+
+# make non-root user able to use kubectl
+mkdir -p $HOME/.kube
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+## VERIFY BASICS
+
+kubectl get all --all-namespaces
+
+
+### NOT SURE THIS IS NEEDED. i skipped most recently... leave off for now
+kubectl -n kube-system get ds -l 'k8s-app==kube-proxy' -o json \
+| jq '.items[0].spec.template.spec.containers[0].command |= .+ ["--proxy-mode=userspace"]' \
+| kubectl apply -f - && kubectl -n kube-system delete pods -l 'k8s-app==kube-proxy'
+
+# allow master node to run deployments
+
+kubectl taint nodes --all node-role.kubernetes.io/master-
+
+## git clone voltha
+mkdir -p ~/source/voltha
+git clone https://github.com/donNewtonAlpha/voltha.git
+cd ~/source/voltha/k8s/
+
+
+
+kubectl apply -f calico-1.6.yml 
+
+
+### STOPPING BEFORE VOLTHA SPECIFICS.  CHECK ENVIRONMENT HEALTH ####
+
+kubectl get pods --all-namespaces
+kubectl get all --all-namespaces
+
+# verify calico networking a dns
+dig @10.96.0.10 calico-etcd.kube-system.svc.cluster.local
+dig @10.96.0.10 kubernetes.default.svc.cluster.local
+dig @10.96.0.10 SRV _https._tcp.kubernetes.default.svc.cluster.local
+
+
+### VOLTHA BEGINS ###
+
+kubectl apply -f namespace.yml 
+kubectl apply -f ingress/
+
+# BASE COMPONENTS
+
+kubectl apply -f single-node/zookeeper.yml
+kubectl apply -f single-node/kafka.yml
+
+kubectl get pod -n voltha
+kubectl describe pod kafka-0 -n voltha
+kubectl logs kafka-0 -n voltha
+
+mkdir -p ~/source/voltha/runtime/consul/data
+mkdir -p ~/source/voltha/runtime/consul/config
+mkdir -p ~/source/voltha/runtime/fluentd
+
+## edit these files to reflect persistent mount binds above.  then run
+
+kubectl apply -f foundry-node/consul_persist.yml
+kubectl apply -f foundry-node/fluentd.yml
+
+## verify mount binds are writing data
+
+ls -atlrR ~/source/voltha/runtime/
+
+kubectl apply -f foundry-node/vcore_for_consul_repo.yml
+
+## check health
+kubectl log vcore-57957b4c9b-29j4z -n voltha -f --tail=20
+kubectl exec -ti vcore-57957b4c9b-29j4z -n voltha -- /bin/sh
+
+
+kubectl apply -f foundry-node/ofagent_repo.yml 
+kubectl apply -f foundry-node/envoy_for_consul_repo.yml 
+kubectl apply -f foundry-node/vcli_repo.yml 
+kubectl apply -f foundry-node/netconf_repo.yml 
+
+
+# verify
+kubectl get pods -n voltha
+
+kubectl apply -f grafana.yml 
+kubectl apply -f foundry-node/stats_repo.yml 
+
+# verify
+kubectl get pods -n voltha
+
+
+
+# get svc ip and connect to voltha cli
+kubectl get svc -n voltha
+ssh -p 5022 voltha@10.107.139.3
+
+
+
+### VOLTHA CORE DONE ### 
+
+
+## deploy ponsim if needed.  WARNING USES LOTS OF CPU
+
+kubectl apply -f olt_repo.yml 
+kubectl apply -f onu_repo.yml 
+
+
+
