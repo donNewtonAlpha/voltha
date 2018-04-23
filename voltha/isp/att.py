@@ -5,8 +5,6 @@ import requests
 import json
 import structlog
 
-#TODO: make obsolete, get it from the database proxy
-activeOnus = []
 #TODO : Make all this asynchronous
 lock = Lock()
 log = structlog.get_logger()
@@ -22,18 +20,16 @@ def new_onu_detected(onuData):
     onuSerialNumber = onuData['serial_number']
     deviceId = onuData['device_id']
     ponId = onuData['pon_id']
-    #TODO: keep it / remove it ?
-    oltMessage = onuData['olt_event_message']
 
     oltParentId = DEFAULT_DPID
     oltTag = 'defaultTag'
 
     log.info('FOUNDRY-onu-data-preparation-before-device-check', onuSerialNumber=onuSerialNumber, deviceId=deviceId,
-             ponId = ponId, oltParentId=oltParentId, oltTag=oltTag, rawmessage=oltMessage)
+             ponId = ponId, oltParentId=oltParentId, oltTag=oltTag, rawOnuData=onuData)
 
     try :
         devices = proxy.get('/devices')
-        log.info('FOUNDRY-getting-devices-from-storage', devicesStored=devices)
+        log.info('FOUNDRY-searching-for-olt-in-devices-from-storage', devicesStored=devices, deviceId=deviceId)
 
         for device in devices:
             log.debug('FOUNDRY-checking-for device', device=device, deviceId=deviceId)
@@ -48,26 +44,35 @@ def new_onu_detected(onuData):
                 #Modification of dpid to match ONOS : bug
                 #TODO: fix the source of the bug
                 oltParentId = '0000{}'.format(oltParentId[4:])
-                log.debug('FOUNDRY-device-dpid-modifcation-for-onos', device=device, deviceId=deviceId, dpid=oltParentId, tag=oltTag)
+                log.info('FOUNDRY-device-dpid-modifcation-for-onos', device=device, deviceId=deviceId, dpid=oltParentId, tag=oltTag)
+
+
+
+        log.info('FOUNDRY-onu-data-preparation-after-device-check', onuSerialNumber=onuSerialNumber, deviceId=deviceId,
+                 ponId=ponId, oltParentId=oltParentId, oltTag=oltTag, rawmessage=onuData)
+
+        with lock:
+            # Listing active ONUs
+            activeOnus = [device.serial_number for device in devices if device.parent_id == deviceId]
+
+            log.debug('FOUNDRY-checking-if-device-already-activated', activeOnus=activeOnus,
+                      serial_number=onuSerialNumber)
+            if onuSerialNumber not in activeOnus:
+                try:
+                    t = Thread(target=add_subscriber_on_pon,
+                               args=(deviceId, oltParentId, oltTag, onuSerialNumber, ponId, len(activeOnus) + 1))
+                    t.start()
+                except Exception as e:
+                    log.error('FOUNDRY att onu detection error: provisionning calls', e)
+            else:
+                log.debug('FOUNDRY-trying-to-activate-already-activated-onu', serialNumber=onuSerialNumber,
+                          activatedOnus=activeOnus)
 
     except Exception as e:
         log.error('FOUNDRY att onu detection error: preparation', e)
         return
 
-    log.info('FOUNDRY-onu-data-preparation-after-device-check', onuSerialNumber=onuSerialNumber, deviceId=deviceId,
-             ponId=ponId, oltParentId=oltParentId, oltTag=oltTag, rawmessage=oltMessage)
 
-    with lock:
-        log.debug('FOUNDRY locking before checking activated onus', activeOnus=activeOnus, serial_number=onuSerialNumber)
-        if onuSerialNumber not in activeOnus:
-            try:
-                activeOnus.append(onuSerialNumber)
-                t = Thread(target=add_subscriber_on_pon, args=(deviceId, oltParentId, oltTag, onuSerialNumber, ponId, len(activeOnus)))
-                t.start()
-            except Exception as e:
-                log.error('FOUNDRY att onu detection error: provisionning calls', e)
-        else:
-            log.debug('FOUNDRY-trying-to-activate-already-activated-onu', serialNumber=onuSerialNumber, activatedOnus=activeOnus)
 
 
 
