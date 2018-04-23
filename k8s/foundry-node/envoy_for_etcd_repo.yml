@@ -34,8 +34,6 @@ spec:
     metadata:
       labels:
         app: voltha
-      annotations:
-        cni: "calico"
     spec:
       containers:
         - name: voltha
@@ -53,6 +51,9 @@ spec:
             - "/usr/local/bin/envoyd"
             - "-envoy-cfg-template=/envoy/voltha-grpc-proxy.template.json"
             - "-envoy-config=/envoy/voltha-grpc-proxy.json"
+            - "-kv=etcd"
+            - "-kv-svc-name=etcd.$(NAMESPACE).svc.cluster.local"
+            - "-kv-port=2379"
           ports:
             - containerPort: 8882
               name: rest-port

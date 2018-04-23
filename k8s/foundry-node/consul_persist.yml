@@ -111,10 +111,10 @@ spec:
       volumes:
       - name: consul-config
         hostPath:
-          path: /home/foundry/source/voltha/runtime/consul/config
+          path: /var/lib/voltha-runtime/consul/config
           type: Directory
       - name: consul-data
         hostPath:
-          path: /home/foundry/source/voltha/runtime/consul/data
+          path: /var/lib/voltha-runtime/consul/data
           type: Directory
 

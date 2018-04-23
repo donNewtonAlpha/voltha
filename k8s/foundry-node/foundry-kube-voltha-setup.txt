@@ -4,6 +4,7 @@
 # minimum 8vcpu 8gb memory, 40GB disk.  Probably needs higher
 #
 # basic install of 16.04, patched and updated
+#
 
 apt update
 apt dist-upgrade
@@ -38,27 +39,41 @@ systemctl enable kubelet
 systemctl status docker
 systemctl status kubelet
 
-## allow insecure docker repos
-sudo vi /etc/docker/daemon.json
 
-## INSIDE daemon.json file
+## allow insecure docker repos
+cat <<EOF > /etc/docker/daemon.json
 {
   "insecure-registries":[ "docker-repo:5000" ]
 }
+EOF
 
 systemctl restart docker
 usermod -aG docker <non-root-user>
 
+reboot
 
 ## REBOOT ##
 
 
 
+
+### stage persistent directories
+
+sudo mkdir -p /var/lib/voltha-runtime/consul/data
+sudo mkdir -p /var/lib/voltha-runtime/consul/config
+sudo mkdir -p /var/lib/voltha-runtime/fluentd
+sudo mkdir -p /var/lib/voltha-runtime/kafka
+sudo mkdir -p /var/lib/voltha-runtime/zookeeper/data
+sudo mkdir -p /var/lib/voltha-runtime/zookeeper/datalog
+sudo mkdir -p /var/lib/voltha-runtime/grafana/data
+sudo mkdir -p /var/lib/voltha-runtime/onos/config
+sudo chown -R $(id -u):$(id -g) /var/lib/voltha-runtime
+
+
+## intialize base k8s environment
+
 sudo kubeadm init
 ### COPY RESULTS into ~/kubeadm-setup.txt
-
-
-### ROOT WORK DONE ###
 
 # make non-root user able to use kubectl
 mkdir -p $HOME/.kube
@@ -85,9 +100,9 @@ cd ~/source
 git clone https://github.com/donNewtonAlpha/voltha.git
 cd ~/source/voltha/k8s/
 
-
-
+# setup container networking.
 kubectl apply -f calico-1.6.yml 
+
 
 
 ### STOPPING BEFORE VOLTHA SPECIFICS.  CHECK ENVIRONMENT HEALTH ####
@@ -105,64 +120,79 @@ dig @10.96.0.10 SRV _https._tcp.kubernetes.default.svc.cluster.local
 
 ### VOLTHA BEGINS ###
 
-
 kubectl apply -f namespace.yml 
 kubectl apply -f ingress/
 
 # BASE COMPONENTS
 
-kubectl apply -f single-node/zookeeper.yml
-kubectl apply -f single-node/kafka.yml
+## these files have been edited to reflect persistent environment
+
+kubectl apply -f foundry-node/zookeeper_persist.yml
+kubectl apply -f foundry-node/kafka_persist.yml
+kubectl apply -f foundry-node/consul_persist.yml
+kubectl apply -f foundry-node/fluentd.yml
+
+# verify pods startup, describe and get logs on select ones
 
 kubectl get pod -n voltha
 kubectl describe pod kafka-0 -n voltha
 kubectl logs kafka-0 -n voltha
-
-mkdir -p ~/source/voltha/runtime/consul/data
-mkdir -p ~/source/voltha/runtime/consul/config
-mkdir -p ~/source/voltha/runtime/fluentd
-
-## edit these files to reflect persistent mount binds above.  then run
-
-kubectl apply -f foundry-node/consul_persist.yml
-kubectl apply -f foundry-node/fluentd.yml
+kubectl describe pod consul-0 -n voltha
+kubectl logs consul-0 -n voltha
 
 ## verify mount binds are writing data
 
-ls -atlrR ~/source/voltha/runtime/
+ls -atlrR /var/lib/voltha-runtime/
 
 
 
 ### VOLTHA CORE AND ACCESSORY CONTAINERS ####
 
 kubectl apply -f foundry-node/vcore_for_consul_repo.yml
-
-## check health
-kubectl log vcore-57957b4c9b-29j4z -n voltha -f --tail=20
-kubectl exec -ti vcore-57957b4c9b-29j4z -n voltha -- /bin/sh
-#   exit shell back to host
-
 kubectl apply -f foundry-node/ofagent_repo.yml 
 kubectl apply -f foundry-node/envoy_for_consul_repo.yml 
 kubectl apply -f foundry-node/vcli_repo.yml 
 kubectl apply -f foundry-node/netconf_repo.yml 
-kubectl apply -f grafana.yml 
+kubectl apply -f foundry-node/grafana_persist.yml 
 kubectl apply -f foundry-node/stats_repo.yml 
 
-# verify
+## edit onos network config to reflect your OLT hardware.  Otherwise copy as-is
+cp ~/source/voltha/onos-config/network-cfg.json /var/lib/voltha-runtime/onos/config/
+
+kubectl apply -f foundry-node/onos_repo.yml 
+
+
+# verify all pods
 kubectl get pods -n voltha
 
+## check health, vcore is the big one
+kubectl get pods -n voltha   # get pod name of choice
+kubectl describe pod <pod-name> -n voltha
+kubectl log <pod-name> -n voltha -f --tail=20
+kubectl exec -ti <pod-name> -n voltha -- /bin/sh
+#   exit shell back to host
 
-# get svc ip and connect to voltha cli
-kubectl get svc -n voltha
-ssh -p 5022 voltha@10.107.139.3
+
+
+# get svc ip and connect cli
+kubectl get svc -n voltha  # note the vcli clusterIP, and the onos clusterIP
+
+# voltha, password admin
+ssh -p 5022 voltha@<vcli-cluster-IP>
+## run "devices" to verify 
+## type quit to exit voltha shell
+
+# onos, password karaf
+ssh -p 8101 karaf@<onos-cluster-IP>
+## run "netcfg" to verify 
+## type logout to exit onos shell
 
 
 ### VOLTHA CORE DONE ### 
 
 
 
-## deploy ponsim if needed.  WARNING USES LOTS OF CPU
+## deploy ponsim if needed.  WARNING USES LOTS OF CPU AND DISK USAGE FOR LOGGING. WILL CAUSE EVICTED CONTAINERS
 
 kubectl apply -f foundry-node/olt_repo.yml 
 kubectl apply -f foundry-node/onu_repo.yml 
@@ -172,6 +202,5 @@ kubectl apply -f foundry-node/onu_repo.yml
 
 kubectl delete -f foundry-node/olt_repo.yml
 kubectl delete -f foundry-node/onu_repo.yml 
-
 
 

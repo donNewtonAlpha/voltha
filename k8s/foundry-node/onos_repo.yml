@@ -36,6 +36,9 @@ spec:
       containers:
         - name: onos
           image: "voltha/voltha-onos:latest"
+          volumeMounts:
+          - name: onos-net-config
+            mountPath: /root/onos/config/network-cfg.json
           env:
             - name: POD_IP
               valueFrom:
@@ -55,3 +58,8 @@ spec:
             - containerPort: 8181
               name: ui-port
           imagePullPolicy: IfNotPresent
+      volumes:
+      - name: onos-net-config
+        hostPath:
+          path: /var/lib/voltha-runtime/onos/config/network-cfg.json
+          type: File

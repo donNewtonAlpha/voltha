@@ -38,6 +38,6 @@ spec:
       volumes:
       - name: fluentd-log
         hostPath:
-          path: /home/foundry/source/voltha/runtime/fluentd
+          path: /var/lib/voltha-runtime/fluentd
           type: Directory
 
