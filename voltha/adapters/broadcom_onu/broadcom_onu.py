@@ -46,6 +46,8 @@ from voltha.protos.bbf_fiber_gemport_body_pb2 import GemportsConfigData
 from common.frameio.frameio import hexify
 from voltha.extensions.omci.omci import *
 
+from voltha.registry import registry
+
 _ = third_party
 log = structlog.get_logger()
 
@@ -318,9 +320,11 @@ class BroadcomOnuHandler(object):
         self.proxy_address = None
         self.tx_id = 0
 
-        self.tconts = []
-        self.gemPorts = []
         self.activatedOnce = False
+
+        # Proxy for api calls
+        self.core = registry('core')
+        self.proxy = self.core.get_proxy('/')
 
         # Need to query ONU for number of supported uni ports
         # For now, temporarily set number of ports to 1 - port #2
@@ -350,14 +354,37 @@ class BroadcomOnuHandler(object):
                 device.oper_status = OperStatus.ACTIVE
                 self.adapter_agent.update_device(device)
                 if self.activatedOnce:
-                    #Reactivation case : replay Tcont and gemPort
-                    self.log.info('FOUNDRY-onu-reactivation-successful', Tconts=self.tconts, gemPorts=self.gemPorts)
-                    for tcontToReapply in self.tconts:
-                        self.create_tcont(tcontToReapply, traffic_descriptor_data=None)
-                    for gemPortToReapply in self.gemPorts:
-                        self.create_gemport(gemPortToReapply)
+                    try:
+                        # Reactivation case : replay Tcont and gemPort
+                        self.log.info('FOUNDRY-onu-reapplying-tconts-and-gemports', serial_number=device.serial_number)
+                        # Get all v_ont_anis
+                        v_ont_anis = self.proxy.get('/v_ont_anis')
+                        # Get all tconts
+                        tconts = self.proxy.get('/tconts')
+                        # Get all gemports
+                        gemports = self.proxy.get('/gemports')
 
+                        for v_ont_ani in v_ont_anis:
+                            # Find matching v_ont_ani
+                            if v_ont_ani.data.expected_serial_number == device.serial_number:
+                                # Get tcont(s) for device
+                                for tcont in tconts:
+                                    if tcont.interface_reference == v_ont_ani.name:
+                                        self.create_tcont(tcont, traffic_descriptor_data=None)
+                                        self.log.info('FOUNDRY-reapplying-existing-tcont', tcont=tcont,
+                                                      serial_number=device.serial_number)
+                                        # Get gemport(s) for device
+                                        for gemport in gemports:
+                                            if gemport.tcont_ref == tcont.name:
+                                                self.create_gemport(gemport)
+                                                self.log.info('FOUNDRY-reapplying-existing-gemport', gemport=gemport,
+                                                              tcont=tcont, serial_number=device.serial_number)
 
+                        self.log.info('FOUNDRY-onu-reapplying-tconts-and-gemports-finished')
+
+                    except Exception as e:
+                        log.error('exception-getting-data-from-storage', error=e)
+                    
             else:
                 device = self.adapter_agent.get_device(self.device_id)
                 self.log.info('FOUNDRY-onu-event-activation-NOT-successful', old_state=device.oper_status,
@@ -1649,7 +1676,6 @@ class BroadcomOnuHandler(object):
             self.send_set_8021p_mapper_service_profile(0x8001,
                                                        gem_port.gemport_id)
             yield self.wait_for_response()
-            self.gemPorts.append(gem_port)
             self.activatedOnce = True
 
 
@@ -1685,7 +1711,6 @@ class BroadcomOnuHandler(object):
             self.log.debug('tcont', tcont=tcont.alloc_id)
             self.send_set_tcont(0x8001, tcont.alloc_id)
             yield self.wait_for_response()
-            self.tconts.append(tcont)
         else:
             self.log.info('recevied-null-tcont-data', tcont=tcont.alloc_id)
 
@@ -1734,6 +1759,8 @@ class BroadcomOnuHandler(object):
             self.log.info('sending-admin-state-unlock-towards-device', device=device)
             self.send_set_admin_state(0x0000, ADMIN_STATE_UNLOCK)
             yield self.wait_for_response()
+            # Flag that the device has been previously activated
+            self.activatedOnce = True
             device = self.adapter_agent.get_device(device.id)
             # Re-enable the ports on that device
             self.adapter_agent.enable_all_ports(device.id)
