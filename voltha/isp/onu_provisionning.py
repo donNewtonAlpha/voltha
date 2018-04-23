@@ -2,18 +2,21 @@ import time
 import structlog
 import grpc
 import requests
-import voltha.main
-log = structlog.get_logger()
+from voltha.registry import registry
 from voltha.protos.bbf_fiber_base_pb2 import VOntaniConfig, VEnetConfig
 from voltha.protos.bbf_fiber_tcont_body_pb2 import TcontsConfigData
 from voltha.protos.bbf_fiber_gemport_body_pb2 import GemportsConfigData
 from voltha.protos.voltha_pb2 import VolthaGlobalServiceStub
 
+log = structlog.get_logger()
+core = registry('core')
+
 #TODO: make it clean and dicover the port through service or something
 try:
-
-    channel = grpc.insecure_channel('localhost:{}'.format(voltha.main.defs['grpc_port']))
+    endpoint = 'localhost:{}'.format(core.dispatcher.grpc_port)
+    channel = grpc.insecure_channel(endpoint)
     stub = VolthaGlobalServiceStub(channel)
+    log.info('creating-grpc-client-for-onu-autodetection', grpcEndpoint=endpoint)
 except Exception as e:
     log.error('Grpc stub preparation error', error=e)
 activeOnus = []
