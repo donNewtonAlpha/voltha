@@ -2,16 +2,21 @@ import time
 import structlog
 import grpc
 import requests
-log = structlog.get_logger()
+from voltha.registry import registry
 from voltha.protos.bbf_fiber_base_pb2 import VOntaniConfig, VEnetConfig
 from voltha.protos.bbf_fiber_tcont_body_pb2 import TcontsConfigData
 from voltha.protos.bbf_fiber_gemport_body_pb2 import GemportsConfigData
 from voltha.protos.voltha_pb2 import VolthaGlobalServiceStub
 
+log = structlog.get_logger()
+core = registry('core')
+
 #TODO: make it clean and dicover the port through service or something
 try:
-    channel = grpc.insecure_channel('localhost:50556')
+    endpoint = 'localhost:{}'.format(core.dispatcher.grpc_port)
+    channel = grpc.insecure_channel(endpoint)
     stub = VolthaGlobalServiceStub(channel)
+    log.info('creating-grpc-client-for-onu-autodetection', grpcEndpoint=endpoint)
 except Exception as e:
     log.error('Grpc stub preparation error', error=e)
 activeOnus = []
@@ -157,7 +162,7 @@ def createGemPort(name, enet, tcont, id):
 
 def onosSubscriber(oltDpid, port, ctag):
     #TODO: discover onos ip
-    r = requests.post('http://10.64.1.101:8181/onos/olt/oltapp/of%3A{}/{}/{}'.format(oltDpid, port, ctag))
+    r = requests.post('http://onos:8181/onos/olt/oltapp/of%3A{}/{}/{}'.format(oltDpid, port, ctag))
     if r.status_code != 200:
         log.error("Error {} on ONOS add subscriber POST".format(r.status_code))
         exit()
