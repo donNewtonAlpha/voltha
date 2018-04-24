@@ -20,6 +20,8 @@ import grpc
 import collections
 import time
 
+from twisted.internet import reactor
+
 from voltha.protos.device_pb2 import Port, Device
 from voltha.protos.common_pb2 import OperStatus, AdminState, ConnectStatus
 from voltha.protos.logical_device_pb2 import LogicalDevice
@@ -35,6 +37,7 @@ from voltha.protos.bbf_fiber_tcont_body_pb2 import TcontsConfigData
 import voltha.core.flow_decomposer as fd
 
 ASFVOLT_HSIA_ID = 13 # FIXME
+ASFVOLT_DHCP_TAGGED_ID = 5 # FIXME
 
 Onu = collections.namedtuple("Onu", ["intf_id", "onu_id"])
 
@@ -82,34 +85,37 @@ class OpenoltDevice(object):
         device.oper_status = OperStatus.ACTIVATING
         self.adapter_agent.update_device(device)
 
+
         # Initialize gRPC
         self.channel = grpc.insecure_channel(self.host_and_port)
-        self.stub = openolt_pb2_grpc.OpenoltStub(self.channel)
+        self.channel_ready_future = grpc.channel_ready_future(self.channel)
 
         # Start indications thread
-        self.indications = self.stub.EnableIndication(openolt_pb2.Empty())
-        self.indications_thread = threading.Thread(target=self.process_indication)
+        self.indications_thread = threading.Thread(target=self.process_indications)
         self.indications_thread.daemon = True
         self.indications_thread.start()
 
-    def process_indication(self):
-        while 1:
+    def process_indications(self):
+        self.channel_ready_future.result() # blocks till gRPC connection is complete
+        self.stub = openolt_pb2_grpc.OpenoltStub(self.channel)
+        self.indications = self.stub.EnableIndication(openolt_pb2.Empty())
+        while True:
+            # get the next indication from olt
             ind = next(self.indications)
             self.log.debug("rx indication", indication=ind)
+            # schedule indication handlers to be run in the main event loop
             if ind.HasField('olt_ind'):
-                self.olt_indication(ind.olt_ind)
+                reactor.callFromThread(self.olt_indication, ind.olt_ind)
             elif ind.HasField('intf_ind'):
-                self.intf_indication(ind.intf_ind)
+                reactor.callFromThread(self.intf_indication, ind.intf_ind)
             elif ind.HasField('intf_oper_ind'):
-                self.intf_oper_indication(ind.intf_oper_ind)
+                reactor.callFromThread(self.intf_oper_indication, ind.intf_oper_ind)
             elif ind.HasField('onu_disc_ind'):
-                self.onu_discovery_indication(ind.onu_disc_ind)
+                reactor.callFromThread(self.onu_discovery_indication, ind.onu_disc_ind)
             elif ind.HasField('onu_ind'):
-                self.onu_indication(ind.onu_ind)
+                reactor.callFromThread(self.onu_indication, ind.onu_ind)
             elif ind.HasField('omci_ind'):
-                self.omci_indication(ind.omci_ind)
-            # Throttle indications
-            time.sleep(0.1)
+                reactor.callFromThread(self.omci_indication, ind.omci_ind)
 
     def olt_indication(self, olt_indication):
 	self.log.debug("olt indication", olt_ind=olt_indication)
@@ -163,15 +169,18 @@ class OpenoltDevice(object):
 
         if onu_id is None:
             onu_id = self.new_onu_id(onu_disc_indication.intf_id)
-            self.add_onu_device(
-                onu_disc_indication.intf_id,
-                self.intf_id_to_port_no(onu_disc_indication.intf_id, Port.PON_OLT),
-                onu_id,
-                onu_disc_indication.serial_number)
-
-            self.activate_onu(
-                onu_disc_indication.intf_id, onu_id,
-                serial_number=onu_disc_indication.serial_number)
+            try:
+                self.add_onu_device(
+                    onu_disc_indication.intf_id,
+                    self.intf_id_to_port_no(onu_disc_indication.intf_id, Port.PON_OLT),
+                    onu_id,
+                    onu_disc_indication.serial_number)
+            except Exception as e:
+                self.log.exception('onu activation failed', e=e)
+            else:
+                self.activate_onu(
+                    onu_disc_indication.intf_id, onu_id,
+                    serial_number=onu_disc_indication.serial_number)
         else:
             # FIXME - handle discovery of already activated onu
 	    self.log.info("onu activation in progress",
@@ -571,22 +580,21 @@ class OpenoltDevice(object):
     def divide_and_add_flow(self, onu_id, intf_id, classifier, action):
         if 'ip_proto' in classifier:
             if classifier['ip_proto'] == 17:
-                self.log.error('dhcp flow add ignored')
+                self.log.info('dhcp flow add')
+                self.add_dhcp_trap(classifier, action, onu_id, intf_id)
             elif classifier['ip_proto'] == 2:
                 self.log.info('igmp flow add ignored')
             else:
-                self.log.info("Invalid-Classifier-to-handle",
-                              classifier=classifier,
-                              action=action)
+                self.log.info("Invalid-Classifier-to-handle", classifier=classifier,
+                        action=action)
         elif 'eth_type' in classifier:
             if classifier['eth_type'] == 0x888e:
                 self.log.error('epol flow add ignored')
         elif 'push_vlan' in action:
             self.add_data_flow(onu_id, intf_id, classifier, action)
         else:
-            self.log.info('Invalid-flow-type-to-handle',
-                          classifier=classifier,
-                          action=action)
+            self.log.info('Invalid-flow-type-to-handle', classifier=classifier,
+                    action=action)
 
     def add_data_flow(self, onu_id, intf_id, uplink_classifier, uplink_action):
 
@@ -605,8 +613,7 @@ class OpenoltDevice(object):
         # will take care of handling all the p bits.
         # We need to revisit when mulitple gem port per p bits is needed.
         self.add_hsia_flow(onu_id, intf_id, uplink_classifier, uplink_action,
-                          downlink_classifier, downlink_action,
-                          ASFVOLT_HSIA_ID)
+                downlink_classifier, downlink_action, ASFVOLT_HSIA_ID)
 
     def mk_classifier(self, classifier_info):
 
@@ -659,46 +666,52 @@ class OpenoltDevice(object):
         return action
 
     def add_hsia_flow(self, onu_id, intf_id, uplink_classifier, uplink_action,
-                     downlink_classifier, downlink_action, hsia_id):
+                downlink_classifier, downlink_action, hsia_id):
 
         gemport_id = self.mk_gemport_id(onu_id)
-        alloc_id = self.mk_alloc_id(onu_id)
         flow_id = self.mk_flow_id(onu_id, intf_id, hsia_id)
 
-        self.log.info('add_hsia_flow',
-                      onu_id=onu_id,
-                      classifier=uplink_classifier,
-                      action=uplink_action,
-                      gemport_id=gemport_id,
-                      flow_id=flow_id,
-                      sched_info=alloc_id)
+        self.log.info('add upstream flow', onu_id=onu_id, classifier=uplink_classifier,
+                action=uplink_action, gemport_id=gemport_id, flow_id=flow_id)
 
         flow = openolt_pb2.Flow(
-            onu_id=onu_id,
-            flow_id=flow_id,
-            flow_type="upstream",
-            gemport_id=gemport_id,
-            classifier=self.mk_classifier(uplink_classifier),
-            action=self.mk_action(uplink_action))
+                onu_id=onu_id, flow_id=flow_id, flow_type="upstream",
+                gemport_id=gemport_id, classifier=self.mk_classifier(uplink_classifier),
+                action=self.mk_action(uplink_action))
+
         self.stub.FlowAdd(flow)
         time.sleep(0.1) # FIXME
 
-        self.log.info('Adding-ARP-downstream-flow',
-                      classifier=downlink_classifier,
-                      action=downlink_action,
-                      gemport_id=gemport_id,
-                      flow_id=flow_id)
+        self.log.info('add downstream flow', classifier=downlink_classifier,
+                action=downlink_action, gemport_id=gemport_id, flow_id=flow_id)
 
         flow = openolt_pb2.Flow(
-            onu_id=onu_id,
-            flow_id=flow_id,
-            flow_type="downstream",
-            access_intf_id=intf_id,
-            gemport_id=gemport_id,
-            classifier=self.mk_classifier(downlink_classifier),
-            action=self.mk_action(downlink_action))
+                onu_id=onu_id, flow_id=flow_id, flow_type="downstream",
+                access_intf_id=intf_id, gemport_id=gemport_id,
+                classifier=self.mk_classifier(downlink_classifier),
+                action=self.mk_action(downlink_action))
+
         self.stub.FlowAdd(flow)
         time.sleep(0.1) # FIXME
+
+    def add_dhcp_trap(self, classifier, action, onu_id, intf_id):
+
+        self.log.info('add dhcp trap', classifier=classifier, action=action)
+
+        action.clear()
+        action['trap_to_host'] = True
+        classifier['pkt_tag_type'] = 'single_tag'
+        classifier.pop('vlan_vid', None)
+
+        gemport_id = self.mk_gemport_id(onu_id)
+        flow_id = self.mk_flow_id(onu_id, intf_id, ASFVOLT_DHCP_TAGGED_ID)
+
+        flow = openolt_pb2.Flow(
+                onu_id=onu_id, flow_id=flow_id, flow_type="upstream",
+                gemport_id=gemport_id, classifier=self.mk_classifier(classifier),
+                action=self.mk_action(action))
+
+        self.stub.FlowAdd(flow)
 
     def mk_flow_id(self, onu_id, intf_id, id):
         # Tp-Do Need to generate unique flow ID using
