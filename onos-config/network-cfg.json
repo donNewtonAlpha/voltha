@@ -1,11 +1,11 @@
 {
   "devices": {
-    "of:0001000000000001": {
+    "of:0000a82bb536769e": {
       "basic": {
         "driver": "pmc-olt"
       },
       "accessDevice": {
-        "uplink": "129",
+        "uplink": "128",
         "vlan": "10"
       }
     },
