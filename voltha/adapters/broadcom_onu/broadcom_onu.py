@@ -320,7 +320,7 @@ class BroadcomOnuHandler(object):
         self.event_messages = DeferredQueue()
         self.proxy_address = None
         self.tx_id = 0
-
+        #Flag to know if ONU has been activated before and therefore tcont and gemports have to be replayed on reboot
         self.activatedOnce = False
 
         # Proxy for api calls
@@ -340,7 +340,6 @@ class BroadcomOnuHandler(object):
     @inlineCallbacks
     def handle_onu_events(self):
         event_msg = yield self.event_messages.get()
-        self.log.info('FOUNDRY-handling-onu-event',event_message=event_msg)
 
         if event_msg['event'] == 'activation-completed':
 
@@ -349,15 +348,16 @@ class BroadcomOnuHandler(object):
                 yield self.message_exchange()
 
                 device = self.adapter_agent.get_device(self.device_id)
-                self.log.info('FOUNDRY-onu-event-activation-successful', old_state=device.oper_status,
-                              new_state=OperStatus.ACTIVE)
+                self.log.debug('onu-event-activation-successful', old_state=device.oper_status,
+                              new_state=OperStatus.ACTIVE, event_msg=event_msg)
                 device.connect_status = ConnectStatus.REACHABLE
                 device.oper_status = OperStatus.ACTIVE
                 self.adapter_agent.update_device(device)
+                #If ONU was previously provisionned repush the tconts and gemports to it
                 if self.activatedOnce:
                     try:
                         # Reactivation case : replay Tcont and gemPort
-                        self.log.info('FOUNDRY-onu-reapplying-tconts-and-gemports', serial_number=device.serial_number)
+                        self.log.info('reactivating-onu-reapplying-tconts-and-gemports', serial_number=device.serial_number)
                         # Get all v_ont_anis
                         v_ont_anis = self.proxy.get('/v_ont_anis')
                         # Get all tconts
@@ -372,38 +372,38 @@ class BroadcomOnuHandler(object):
                                 for tcont in tconts:
                                     if tcont.interface_reference == v_ont_ani.name:
                                         self.create_tcont(tcont, traffic_descriptor_data=None)
-                                        self.log.info('FOUNDRY-reapplying-existing-tcont', tcont=tcont,
+                                        self.log.debug('reapplying-existing-tcont', tcont=tcont,
                                                       serial_number=device.serial_number)
                                         # Get gemport(s) for device
                                         for gemport in gemports:
                                             if gemport.tcont_ref == tcont.name:
                                                 self.create_gemport(gemport)
-                                                self.log.info('FOUNDRY-reapplying-existing-gemport', gemport=gemport,
+                                                self.log.debug('reapplying-existing-gemport', gemport=gemport,
                                                               tcont=tcont, serial_number=device.serial_number)
 
-                        self.log.info('FOUNDRY-onu-reapplying-tconts-and-gemports-finished')
+                        self.log.debug('onu-reapplying-tconts-and-gemports-finished')
 
                     except Exception as e:
                         log.error('exception-getting-data-from-storage', error=e)
                     
             else:
                 device = self.adapter_agent.get_device(self.device_id)
-                self.log.info('FOUNDRY-onu-event-activation-NOT-successful', old_state=device.oper_status,
-                              new_state=OperStatus.FAILED)
+                self.log.debug('onu-event-activation-NOT-successful', old_state=device.oper_status,
+                              new_state=OperStatus.FAILED, event_msg=event_msg)
                 device.oper_status = OperStatus.FAILED
                 self.adapter_agent.update_device(device)
 
         elif event_msg['event'] == 'deactivation-completed':
             device = self.adapter_agent.get_device(self.device_id)
-            self.log.info('FOUNDRY-onu-event-deactivation-completed', old_state=device.oper_status,
-                          new_state=OperStatus.DISCOVERED)
+            self.log.debug('onu-event-deactivation-completed', old_state=device.oper_status,
+                          new_state=OperStatus.DISCOVERED, event_msg=event_msg)
             device.oper_status = OperStatus.DISCOVERED
             self.adapter_agent.update_device(device)
 
         elif event_msg['event'] == 'deactivate-onu':
             device = self.adapter_agent.get_device(self.device_id)
-            self.log.info('FOUNDRY-onu-event-deactivate-onu', old_state=device.oper_status,
-                          new_state=OperStatus.DISCOVERED)
+            self.log.debug('onu-event-deactivate-onu', old_state=device.oper_status,
+                          new_state=OperStatus.DISCOVERED, event_msg=event_msg)
             device.connect_status = ConnectStatus.UNREACHABLE
             device.oper_status = OperStatus.DISCOVERED
             self.adapter_agent.update_device(device)
@@ -411,8 +411,9 @@ class BroadcomOnuHandler(object):
 
         elif event_msg['event'] == 'reactivate-onu':
             device = self.adapter_agent.get_device(self.device_id)
-            self.log.info('FOUNDRY-onu-event-reactivate-onu', old_state=device.oper_status,
-                          new_state=OperStatus.DISCOVERED)
+            #Move this ONU back to discovered state for it to get back on the activation logic
+            self.log.debug('onu-event-reactivate-onu', old_state=device.oper_status,
+                          new_state=OperStatus.DISCOVERED, event_msg=event_msg)
             device.oper_status = OperStatus.DISCOVERED
             self.adapter_agent.update_device(device)
 
@@ -420,15 +421,15 @@ class BroadcomOnuHandler(object):
 
             if event_msg['event_data']['ranging_successful'] == True:
                 device = self.adapter_agent.get_device(self.device_id)
-                self.log.info('FOUNDRY-onu-event-ranging-completed-ranging-successful', old_state=device.oper_status,
+                self.log.debug('onu-event-ranging-completed-ranging-successful', old_state=device.oper_status,
                               new_state=OperStatus.ACTIVATING)
                 device.oper_status = OperStatus.ACTIVATING
                 self.adapter_agent.update_device(device)
 
             else:
                 device = self.adapter_agent.get_device(self.device_id)
-                self.log.info('FOUNDRY-onu-event-ranging-completed-ranging-NOT-successful', old_state=device.oper_status,
-                              new_state=OperStatus.FAILED)
+                self.log.debug('onu-event-ranging-completed-ranging-NOT-successful', old_state=device.oper_status,
+                              new_state=OperStatus.FAILED, event_msg=event_msg)
                 device.oper_status = OperStatus.FAILED
                 self.adapter_agent.update_device(device)
 
@@ -1691,6 +1692,7 @@ class BroadcomOnuHandler(object):
             self.send_set_8021p_mapper_service_profile(0x8001,
                                                        gem_port.gemport_id)
             yield self.wait_for_response()
+            #Once a gemport has been provisionned on the ONU it is considered fully activated
             self.activatedOnce = True
 
 

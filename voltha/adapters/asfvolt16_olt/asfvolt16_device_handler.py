@@ -1043,7 +1043,7 @@ class Asfvolt16Handler(OltDeviceHandler):
 
         if ind_info['activation_successful'] is True:
             # No need to re-activate
-            self.log.info('FOUNDRY-handle-activated-onu-REGULAR', olt_id=self.olt_id,
+            self.log.info('onu-successfully-activated', olt_id=self.olt_id,
                           pon_ni=pon_id, onu_data=ind_info)
             msg = {'proxy_address': child_device.proxy_address,
                    'event': 'activation-completed', 'event_data': ind_info}
@@ -1053,7 +1053,8 @@ class Asfvolt16Handler(OltDeviceHandler):
                                                          msg)
         else:
             # Re-activate ONU
-            self.log.info('FOUNDRY-handle-activated-onu-REACTIVATED', olt_id=self.olt_id,
+            # ONU is assumed activated by Voltha by it is not
+            self.log.info('onu-requires-reactivation', olt_id=self.olt_id,
                           pon_ni=pon_id, onu_data=ind_info)
 
             msg = {'proxy_address': child_device.proxy_address,
@@ -1063,8 +1064,17 @@ class Asfvolt16Handler(OltDeviceHandler):
                                                          msg)
             serial_number = (ind_info['_vendor_id'] +
                              ind_info['_vendor_specific'])
-            # TODO: Make this respectable
-            registration_id = '202020202020202020202020202020202020202020202020202020202020202020202020'
+            #Find v_ont_ani to get registration id
+            matching_v_ont_ani = None
+            for v_ont_ani in self.v_ont_anis:
+                if v_ont_ani.v_ont_ani.data.expected_serial_number == child_device.serial_number:
+                    #Matching v_ont_ani for this ONU found
+                    matching_v_ont_ani = v_ont_ani.v_ont_ani
+                    self.log.debug('matching-v_ont_ani-found', onu_device=child_device, v_ont_ani=matching_v_ont_ani)
+            if matching_v_ont_ani is None:
+                self.log.warn('no-matching-v_ont_ani-found-for-onu', onu_device=child_device, v_ont_anis=self.v_ont_anis)
+            #Getting registration id
+            registration_id = self.get_registration_id(matching_v_ont_ani)
             self.log.info('Reactivating-ONU',
                           serial_number=serial_number,
                           onu_id=child_device.proxy_address.onu_id,
@@ -1162,8 +1172,8 @@ class Asfvolt16Handler(OltDeviceHandler):
 
             return
 
-        self.log.info('FOUNDRY-child-device-exists', olt_id=self.olt_id,
-                      pon_ni=ind_info['_pon_id'], onu_data=ind_info, oper_status=child_device.oper_status)
+        self.log.debug('onu-device-already-exists', olt_id=self.olt_id,
+                      pon_ni=ind_info['_pon_id'], onu_data=ind_info, onu_oper_status=child_device.oper_status)
 
         handler = self.onu_handlers.get(child_device.oper_status)
         if handler:
