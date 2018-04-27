@@ -505,7 +505,7 @@ class Bal(object):
             obj.device_id = device_id
             rebootStatus = yield self.stub.BalApiHeartbeat(obj, timeout=GRPC_TIMEOUT)
             self.log.info('OLT-HeartBeat-Response-Received-from',
-                          device=device_id, rebootStatus=rebootStatus)
+                          device=device_id, rebootStatus=rebootStatus.is_reboot)
             returnValue(rebootStatus)
         except Exception as e:
             self.log.info('OLT-HeartBeat-failed', exc=str(e))
