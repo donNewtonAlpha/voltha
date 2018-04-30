@@ -6,8 +6,8 @@
 # basic install of 16.04, patched and updated
 #
 
-apt update
-apt dist-upgrade
+sudo apt update
+sudo apt dist-upgrade
 reboot
 
 #
@@ -15,40 +15,41 @@ reboot
 #
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
 
-add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
-apt update
-apt install docker-ce
+sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+sudo apt update
+sudo apt install docker-ce
 
 #
 # get k8s
 #
-curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
+curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
 
-cat <<EOF >/etc/apt/sources.list.d/kubernetes.list
+sudo cat <<EOF >/etc/apt/sources.list.d/kubernetes.list
 deb http://apt.kubernetes.io/ kubernetes-xenial main
 EOF
 
-apt update
-apt install kubelet kubeadm kubectl
+sudo apt update
+sudo apt install kubelet kubeadm kubectl
 
 
-systemctl start docker
-systemctl start kubelet
-systemctl enable docker
-systemctl enable kubelet
-systemctl status docker
-systemctl status kubelet
+sudo systemctl start docker
+sudo systemctl start kubelet
+sudo systemctl enable docker
+sudo systemctl enable kubelet
+sudo systemctl status docker
+sudo systemctl status kubelet
+# loaded is ok for kubelet. it will exit-loop until a k8s cluster is setup
 
 
 ## allow insecure docker repos
-cat <<EOF > /etc/docker/daemon.json
+sudo cat <<EOF > /etc/docker/daemon.json
 {
-  "insecure-registries":[ "docker-repo:5000" ]
+  "insecure-registries":[ "docker-repo.dev.atl.foundry.att.com:5000" ]
 }
 EOF
 
-systemctl restart docker
-usermod -aG docker <non-root-user>
+sudo systemctl restart docker
+sudo usermod -aG docker <non-root-user>
 
 reboot
 
@@ -59,6 +60,7 @@ reboot
 
 ### stage persistent directories
 
+sudo mkdir -p /var/lib/voltha-runtime/etcd
 sudo mkdir -p /var/lib/voltha-runtime/consul/data
 sudo mkdir -p /var/lib/voltha-runtime/consul/config
 sudo mkdir -p /var/lib/voltha-runtime/fluentd
@@ -71,6 +73,9 @@ sudo chown -R $(id -u):$(id -g) /var/lib/voltha-runtime
 
 
 ## intialize base k8s environment
+
+# kubeadm doesnt like swap
+sudo swapoff -a
 
 sudo kubeadm init
 ### COPY RESULTS into ~/kubeadm-setup.txt
@@ -111,9 +116,9 @@ kubectl get pods --all-namespaces
 kubectl get all --all-namespaces
 
 # verify calico networking a dns
-dig @10.96.0.10 calico-etcd.kube-system.svc.cluster.local
-dig @10.96.0.10 kubernetes.default.svc.cluster.local
-dig @10.96.0.10 SRV _https._tcp.kubernetes.default.svc.cluster.local
+dig +short @10.96.0.10 calico-etcd.kube-system.svc.cluster.local
+dig +short @10.96.0.10 kubernetes.default.svc.cluster.local
+dig +short @10.96.0.10 SRV _https._tcp.kubernetes.default.svc.cluster.local
 
 
 

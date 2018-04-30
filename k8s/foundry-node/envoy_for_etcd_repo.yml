@@ -37,7 +37,7 @@ spec:
     spec:
       containers:
         - name: voltha
-          image: docker-repo:5000/voltha-envoy:1.0
+          image: docker-repo.dev.atl.foundry.att.com:5000/voltha-envoy:1.0
           env:
             - name: POD_IP
               valueFrom:
@@ -54,6 +54,11 @@ spec:
             - "-kv=etcd"
             - "-kv-svc-name=etcd.$(NAMESPACE).svc.cluster.local"
             - "-kv-port=2379"
+       #      - "/bin/sh"
+       #      - "-ecx"
+       #      - |
+       #       sleep 1000
+
           ports:
             - containerPort: 8882
               name: rest-port
