@@ -321,7 +321,6 @@ class BroadcomOnuHandler(object):
         self.proxy_address = None
         self.tx_id = 0
         #Flag to know if ONU has been activated before and therefore tcont and gemports have to be replayed on reboot
-        self.activatedOnce = False
 
         # Proxy for api calls
         self.core = registry('core')
@@ -354,37 +353,45 @@ class BroadcomOnuHandler(object):
                 device.oper_status = OperStatus.ACTIVE
                 self.adapter_agent.update_device(device)
                 #If ONU was previously provisionned repush the tconts and gemports to it
-                if self.activatedOnce:
-                    try:
-                        # Reactivation case : replay Tcont and gemPort
-                        self.log.info('reactivating-onu-reapplying-tconts-and-gemports', serial_number=device.serial_number)
-                        # Get all v_ont_anis
-                        v_ont_anis = self.proxy.get('/v_ont_anis')
-                        # Get all tconts
-                        tconts = self.proxy.get('/tconts')
-                        # Get all gemports
-                        gemports = self.proxy.get('/gemports')
+                try:
+                    # Reactivation case : replay Tcont and gemPort
+                    self.log.info('checking-if-tconts-and-gemports-were-previously-provisioned',
+                                  serial_number=device.serial_number)
 
-                        for v_ont_ani in v_ont_anis:
-                            # Find matching v_ont_ani
-                            if v_ont_ani.data.expected_serial_number == device.serial_number:
-                                # Get tcont(s) for device
-                                for tcont in tconts:
-                                    if tcont.interface_reference == v_ont_ani.name:
-                                        self.create_tcont(tcont, traffic_descriptor_data=None)
-                                        self.log.debug('reapplying-existing-tcont', tcont=tcont,
-                                                      serial_number=device.serial_number)
-                                        # Get gemport(s) for device
-                                        for gemport in gemports:
-                                            if gemport.tcont_ref == tcont.name:
-                                                self.create_gemport(gemport)
-                                                self.log.debug('reapplying-existing-gemport', gemport=gemport,
-                                                              tcont=tcont, serial_number=device.serial_number)
+                    # Get all v_ont_anis
+                    v_ont_anis = self.proxy.get('/v_ont_anis')
+                    # Get all tconts
+                    tconts = self.proxy.get('/tconts')
+                    # Get all gemports
+                    gemports = self.proxy.get('/gemports')
+                    reactivationRequired = False
 
-                        self.log.debug('onu-reapplying-tconts-and-gemports-finished')
+                    for v_ont_ani in v_ont_anis:
+                        # Find matching v_ont_ani
+                        if v_ont_ani.data.expected_serial_number == device.serial_number:
+                            # Get tcont(s) for device
 
-                    except Exception as e:
-                        log.error('exception-getting-data-from-storage', error=e)
+                            for tcont in tconts:
+                                if tcont.interface_reference == v_ont_ani.name:
+                                    reactivationRequired = True
+                                    self.log.debug('reapplying-existing-tcont', tcont=tcont,
+                                                   serial_number=device.serial_number)
+                                    self.create_tcont(tcont, traffic_descriptor_data=None)
+
+                                    # Get gemport(s) for device
+                                    for gemport in gemports:
+                                        if gemport.tcont_ref == tcont.name:
+                                            self.log.debug('reapplying-existing-gemport', gemport=gemport,
+                                                          tcont=tcont, serial_number=device.serial_number)
+
+                                            self.create_gemport(gemport)
+                    if reactivationRequired:
+                        self.log.info('reactivating-onu-tconts-and-gemports-reapplied',
+                                  serial_number=device.serial_number)
+                        self.reenable()
+
+                except Exception as e:
+                    log.error('exception-getting-data-from-storage-when-checking-for-reactivation', error=e)
                     
             else:
                 device = self.adapter_agent.get_device(self.device_id)
@@ -1693,7 +1700,6 @@ class BroadcomOnuHandler(object):
                                                        gem_port.gemport_id)
             yield self.wait_for_response()
             #Once a gemport has been provisionned on the ONU it is considered fully activated
-            self.activatedOnce = True
 
 
     @inlineCallbacks
@@ -1777,7 +1783,6 @@ class BroadcomOnuHandler(object):
             self.send_set_admin_state(0x0000, ADMIN_STATE_UNLOCK)
             yield self.wait_for_response()
             # Flag that the device has been previously activated
-            self.activatedOnce = True
             device = self.adapter_agent.get_device(device.id)
             # Re-enable the ports on that device
             self.adapter_agent.enable_all_ports(device.id)
