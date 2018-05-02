@@ -36,7 +36,7 @@ spec:
     spec:
       containers:
         - name: voltha
-          image: docker-repo:5000/voltha-voltha:1.0
+          image: docker-repo.dev.atl.foundry.att.com:5000/voltha-voltha:1.0.1-nic_ont_fix
           env:
             - name: NAMESPACE
               valueFrom:
