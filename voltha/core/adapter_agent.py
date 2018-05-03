@@ -572,6 +572,9 @@ class AdapterAgent(object):
             logical_device.id = ld_id
             logical_device.datapath_id = dp_id
 
+        if not logical_device.desc.mfr_desc:
+            logical_device.desc.mfr_desc = "VOLTHA Project"
+
         self._make_up_to_date('/logical_devices',
                               logical_device.id, logical_device)
 
@@ -586,10 +589,10 @@ class AdapterAgent(object):
 
     def reconcile_logical_device(self, logical_device_id):
         """
-        This is called by the adapter to reconcile the physical device with 
+        This is called by the adapter to reconcile the physical device with
         the logical device.  For now, we only set the packet-out subscription
-        :param logical_device_id: 
-        :return: 
+        :param logical_device_id:
+        :return:
         """
         # Keep a reference to the packet out subscription as it will be
         # referred during removal
@@ -707,9 +710,16 @@ class AdapterAgent(object):
                        proxy_address,
                        admin_state,
                        **kw):
-        device_type = next((dt for dt in self.root_proxy.get('/device_types')
-                            if dt.vendor_id == vendor_id and \
-                            dt.id.endswith("_onu")), None)
+
+        device_type = None
+
+        for dt in self.root_proxy.get('/device_types'):
+            if (dt.vendor_id == vendor_id or vendor_id in dt.vendor_ids) and \
+                    dt.id.endswith("_onu"):
+                device_type = dt
+
+        assert device_type is not None
+
         # we create new ONU device objects and insert them into the config
         device = Device(
             id=create_cluster_device_id(self.core.core_store_id),

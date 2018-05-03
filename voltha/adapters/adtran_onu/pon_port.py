@@ -179,15 +179,18 @@ class PonPort(object):
         Update the port status and state in the core
         """
         self.log.debug('update-adapter-agent', admin_state=self._admin_state,
-            oper_status=self._oper_status)
+                       oper_status=self._oper_status)
 
         if self._port is not None:
             self._port.admin_state = self._admin_state
             self._port.oper_status = self._oper_status
 
         # adapter_agent add_port also does an update of port status
-        self._handler.adapter_agent.add_port(self._handler.device_id, self.get_port())
+        try:
+            self._handler.adapter_agent.add_port(self._handler.device_id, self.get_port())
 
+        except Exception as e:
+            self.log.exception('update-port', e=e)
 
     @property
     def onu_omci_device(self):
@@ -326,7 +329,7 @@ class PonPort(object):
 
                 for tcont in self._tconts.itervalues():
                     free_entity_id = next((k for k, v in tcont_idents.items()
-                                          if isinstance(k, int) and v.get('alloc_id', 0) == 0xFFFF), None)
+                                          if isinstance(k, int) and v.get('attributes', {}).get('alloc_id', 0) == 0xFFFF), None)
                     if free_entity_id is None:
                         self.log.error('no-available-tconts')
                         break
