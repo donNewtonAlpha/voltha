@@ -1063,28 +1063,34 @@ class Asfvolt16Handler(OltDeviceHandler):
                                                          msg)
             serial_number = (ind_info['_vendor_id'] +
                              ind_info['_vendor_specific'])
-            #Find v_ont_ani to get registration id
+            registration_id = ind_info['registration_id']
             matching_v_ont_ani = None
             for v_ont_ani in self.v_ont_anis:
-                if v_ont_ani.v_ont_ani.data.expected_serial_number == child_device.serial_number:
-                    #Matching v_ont_ani for this ONU found
-                    matching_v_ont_ani = v_ont_ani.v_ont_ani
-                    self.log.debug('matching-v_ont_ani-found', onu_device=child_device, v_ont_ani=matching_v_ont_ani)
+                if v_ont_ani.v_ont_ani.data.expected_serial_number == serial_number:
+                    #Matching serial number
+                    if v_ont_ani.v_ont_ani.data.expected_registration_id == registration_id.strip():
+                        #Matching registration_id
+                        #Matching v_ont_ani for this ONU found
+                        matching_v_ont_ani = v_ont_ani.v_ont_ani
+                        self.log.debug('matching-v_ont_ani-found', onu_device=child_device, v_ont_ani=matching_v_ont_ani)
+                    else:
+                        self.debug('v_ont_ani-with-same-serial-number-but-different-registration-id-found', v_ont_ani=v_ont_ani.v_ont_ani, serial_number=serial_number, registration_id=registration_id)
             if matching_v_ont_ani is None:
                 self.log.warn('no-matching-v_ont_ani-found-for-onu', onu_device=child_device, v_ont_anis=self.v_ont_anis)
-            #Getting registration id
-            registration_id = self.get_registration_id(matching_v_ont_ani)
-            self.log.info('Reactivating-ONU',
-                          serial_number=serial_number,
-                          onu_id=child_device.proxy_address.onu_id,
-                          pon_id=child_device.parent_port_no)
-            onu_info = dict()
-            onu_info['pon_id'] = child_device.parent_port_no
-            onu_info['onu_id'] = child_device.proxy_address.onu_id
-            onu_info['vendor'] = child_device.vendor_id
-            onu_info['vendor_specific'] = serial_number[4:]
-            onu_info['reg_id'] = registration_id
-            self.bal.activate_onu(onu_info)
+            else:
+                #Getting registration id using this function to handle default/no registration id case
+                registration_id = self.get_registration_id(matching_v_ont_ani)
+                self.log.info('Reactivating-ONU',
+                              serial_number=serial_number,
+                              onu_id=child_device.proxy_address.onu_id,
+                              pon_id=child_device.parent_port_no)
+                onu_info = dict()
+                onu_info['pon_id'] = child_device.parent_port_no
+                onu_info['onu_id'] = child_device.proxy_address.onu_id
+                onu_info['vendor'] = child_device.vendor_id
+                onu_info['vendor_specific'] = serial_number[4:]
+                onu_info['reg_id'] = registration_id
+                self.bal.activate_onu(onu_info)
 
 
     def handle_discovered_onu(self, child_device, ind_info):
