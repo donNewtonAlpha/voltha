@@ -58,7 +58,7 @@ reboot
 
 
 
-### stage persistent directories
+### stage local persistent directories
 
 sudo mkdir -p /var/lib/voltha-runtime/etcd
 sudo mkdir -p /var/lib/voltha-runtime/consul/data
@@ -134,7 +134,7 @@ kubectl apply -f ingress/
 
 kubectl apply -f foundry-node/zookeeper_persist.yml
 kubectl apply -f foundry-node/kafka_persist.yml
-kubectl apply -f foundry-node/consul_persist.yml
+kubectl apply -f foundry-node/etcd_persist.yml
 kubectl apply -f foundry-node/fluentd.yml
 
 # verify pods startup, describe and get logs on select ones
@@ -142,8 +142,8 @@ kubectl apply -f foundry-node/fluentd.yml
 kubectl get pod -n voltha
 kubectl describe pod kafka-0 -n voltha
 kubectl logs kafka-0 -n voltha
-kubectl describe pod consul-0 -n voltha
-kubectl logs consul-0 -n voltha
+kubectl describe pod etcd-0 -n voltha
+kubectl logs etcd-0 -n voltha
 
 ## verify mount binds are writing data
 
@@ -153,9 +153,9 @@ ls -atlrR /var/lib/voltha-runtime/
 
 ### VOLTHA CORE AND ACCESSORY CONTAINERS ####
 
-kubectl apply -f foundry-node/vcore_for_consul_repo.yml
+kubectl apply -f foundry-node/vcore_for_etcd_repo.yml
 kubectl apply -f foundry-node/ofagent_repo.yml 
-kubectl apply -f foundry-node/envoy_for_consul_repo.yml 
+kubectl apply -f foundry-node/envoy_for_etcd_repo.yml 
 kubectl apply -f foundry-node/vcli_repo.yml 
 kubectl apply -f foundry-node/netconf_repo.yml 
 kubectl apply -f foundry-node/grafana_persist.yml 
@@ -184,7 +184,7 @@ kubectl get svc -n voltha  # note the vcli clusterIP, and the onos clusterIP
 
 # voltha, password admin
 ssh -p 5022 voltha@<vcli-cluster-IP>
-## run "devices" to verify 
+## run "devices" to verify connectivity to etcd.  you should see "table empty"
 ## type quit to exit voltha shell
 
 # onos, password karaf
