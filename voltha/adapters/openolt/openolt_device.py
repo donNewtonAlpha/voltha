@@ -114,14 +114,15 @@ Logical (OF) UNI port number
     onu id = 7 bits = 128 ONUs per PON port
 
 
-Logical (OF) NNI port number
+PON OLT (OF) port number
 
-    OpenFlow port number corresponding to OLT NNI
+    OpenFlow port number corresponding to PON OLT ports
 
-     15                              0
-    +--+------------------------------+
-    |1 |           nni  id            |
-    +--+------------------------------+
+     31    28                                 0
+    +--------+------------------------~~~------+
+    |  0x2   |          pon intf id            |
+    +--------+------------------------~~~------+
+
 """
 
 """
@@ -133,40 +134,20 @@ class OpenoltDevice(object):
         super(OpenoltDevice, self).__init__()
 
         self.adapter_agent = kwargs['adapter_agent']
+        self.device_num = kwargs['device_num']
         device = kwargs['device']
         self.device_id = device.id
         self.host_and_port = device.host_and_port
         self.log = structlog.get_logger(id=self.device_id, ip=self.host_and_port)
-        self.oper_state = 'unknown'
         self.nni_oper_state = dict() #intf_id -> oper_state
         self.onus = {} # OnuKey -> OnuRec
 
-        # Create logical device
-        ld = LogicalDevice(
-            desc=ofp_desc(
-                hw_desc='FIXME',
-                sw_desc='FIXME', serial_num='FIXME',
-                dp_desc='n/a'),
-            switch_features=ofp_switch_features(
-                n_buffers=256, n_tables=2,
-                capabilities=(
-                    OFPC_FLOW_STATS | OFPC_TABLE_STATS |
-                    OFPC_GROUP_STATS | OFPC_PORT_STATS)),
-            root_device_id=self.device_id)
-        # FIXME
-        ld_initialized = self.adapter_agent.create_logical_device(ld, dpid='de:ad:be:ef:fe:ed') # FIXME
-        self.logical_device_id = ld_initialized.id
-
         # Update device
         device.root = True
-        device.vendor = 'Edgecore'
-        device.model = 'ASFvOLT16'
         device.serial_number = self.host_and_port # FIXME
-        device.parent_id = self.logical_device_id
         device.connect_status = ConnectStatus.REACHABLE
         device.oper_status = OperStatus.ACTIVATING
         self.adapter_agent.update_device(device)
-
 
         # Initialize gRPC
         self.channel = grpc.insecure_channel(self.host_and_port)
@@ -185,15 +166,18 @@ class OpenoltDevice(object):
             # get the next indication from olt
             ind = next(self.indications)
             self.log.debug("rx indication", indication=ind)
-            # schedule indication handlers to be run in the main event loop
+
+            # indication handlers run in the main event loop
             if ind.HasField('olt_ind'):
                 reactor.callFromThread(self.olt_indication, ind.olt_ind)
             elif ind.HasField('intf_ind'):
                 reactor.callFromThread(self.intf_indication, ind.intf_ind)
             elif ind.HasField('intf_oper_ind'):
-                reactor.callFromThread(self.intf_oper_indication, ind.intf_oper_ind)
+                reactor.callFromThread(self.intf_oper_indication,
+                        ind.intf_oper_ind)
             elif ind.HasField('onu_disc_ind'):
-                reactor.callFromThread(self.onu_discovery_indication, ind.onu_disc_ind)
+                reactor.callFromThread(self.onu_discovery_indication,
+                        ind.onu_disc_ind)
             elif ind.HasField('onu_ind'):
                 reactor.callFromThread(self.onu_indication, ind.onu_ind)
             elif ind.HasField('omci_ind'):
@@ -203,7 +187,29 @@ class OpenoltDevice(object):
 
     def olt_indication(self, olt_indication):
 	self.log.debug("olt indication", olt_ind=olt_indication)
-        self.set_oper_state(olt_indication.oper_state)
+
+        # FIXME
+        if olt_indication.oper_state == "down":
+	    self.log.error("ignore olt oper state down", olt_ind=olt_indication)
+            return
+
+        if not hasattr(olt_indication, 'mac') or \
+                not olt_indication.mac:
+            mac = '00:00:00:00:00:' + '{:02x}'.format(self.device_num)
+        else:
+            mac = olt_indication.mac
+
+        # Create logical OF device
+        ld = LogicalDevice(root_device_id=self.device_id)
+        ld_initialized = self.adapter_agent.create_logical_device(ld, dpid=mac)
+        self.logical_device_id = ld_initialized.id
+
+        # Update phys OF device
+        device = self.adapter_agent.get_device(self.device_id)
+        device.parent_id = self.logical_device_id
+        device.oper_status = OperStatus.ACTIVE
+        self.adapter_agent.update_device(device)
+
 
     def intf_indication(self, intf_indication):
 	self.log.debug("intf indication", intf_id=intf_indication.intf_id,
@@ -218,8 +224,10 @@ class OpenoltDevice(object):
         self.add_port(intf_indication.intf_id, Port.PON_OLT, oper_status)
 
     def intf_oper_indication(self, intf_oper_indication):
-	self.log.debug("Received interface oper state change indication", intf_id=intf_oper_indication.intf_id,
-            type=intf_oper_indication.type, oper_state=intf_oper_indication.oper_state)
+	self.log.debug("Received interface oper state change indication",
+                intf_id=intf_oper_indication.intf_id,
+                type=intf_oper_indication.type,
+                oper_state=intf_oper_indication.oper_state)
 
         if intf_oper_indication.oper_state == "up":
             oper_state = OperStatus.ACTIVE
@@ -304,14 +312,16 @@ class OpenoltDevice(object):
         assert onu_indication.onu_id == key.onu_id
 
         if self.onus[key].state is not 'discovered':
-            self.log.debug("ignore onu indication", intf_id=onu_indication.intf_id,
-                    onu_id=onu_indication.onu_id, state=self.onus[key].state)
+            self.log.debug("ignore onu indication",
+                    intf_id=onu_indication.intf_id,
+                    onu_id=onu_indication.onu_id,
+                    state=self.onus[key].state)
             return
 
         self.onus[key] = self.onus[key]._replace(state='active')
 
-        onu_device = self.adapter_agent.get_child_device(
-            self.device_id, onu_id=onu_indication.onu_id)
+        onu_device = self.adapter_agent.get_child_device(self.device_id,
+                onu_id=onu_indication.onu_id)
         assert onu_device is not None
 
         msg = {'proxy_address':onu_device.proxy_address,
@@ -332,7 +342,8 @@ class OpenoltDevice(object):
         # v_enet create (olt)
         #
         uni_no = self.mk_uni_port_num(onu_indication.intf_id, onu_indication.onu_id)
-        uni_name = self.port_name(uni_no, Port.ETHERNET_UNI)
+        uni_name = self.port_name(uni_no, Port.ETHERNET_UNI,
+                serial_number=onu_indication.serial_number)
 	self.adapter_agent.add_port(
             self.device_id,
             Port(
@@ -345,7 +356,6 @@ class OpenoltDevice(object):
         #
         # v_enet create (onu)
         #
-        interface_name = self.port_name(onu_indication.intf_id, Port.PON_OLT, onu_indication.intf_id)
         msg = {'proxy_address':onu_device.proxy_address,
                'event':'create-venet',
                'event_data':{'uni_name':uni_name, 'interface_name':uni_name}}
@@ -419,10 +429,10 @@ class OpenoltDevice(object):
 
         send_pkt = binascii.unhexlify(str(payload).encode("HEX"))
 
-        onu_pkt = openolt_pb2.OnuPacket(intf_id=intf_id_from_port_num(egress_port),
-                onu_id=onu_id_from_port_num(egress_port), pkt=send_pkt)
+        onu_pkt = openolt_pb2.OnuPacket(intf_id=self.intf_id_from_port_num(egress_port),
+                onu_id=self.onu_id_from_port_num(egress_port), pkt=send_pkt)
 
-        self.stub.OnuPacketOut(onu_packet)
+        self.stub.OnuPacketOut(onu_pkt)
 
     def send_proxied_message(self, proxy_address, msg):
         omci = openolt_pb2.OmciMsg(intf_id=proxy_address.channel_id, # intf_id
@@ -452,33 +462,19 @@ class OpenoltDevice(object):
             # FIXME - Remove hardcoded '129'
             return intf_id + 129
         elif intf_type is Port.PON_OLT:
-            # Interface Ids (reported by device) are zero-based indexed
-            # OpenFlow port numbering is one-based.
-            #return intf_id + 65 # FIXME
             return 0x2<<28 | intf_id
         else:
 	    raise Exception('Invalid port type')
 
 
-    def port_name(self, port_no, port_type, intf_id=None):
+    def port_name(self, port_no, port_type, intf_id=None, serial_number=None):
         if port_type is Port.ETHERNET_NNI:
-            prefix = "nni"
+            return "nni" "-" + str(port_no)
         elif port_type is Port.PON_OLT:
             return "pon" + str(intf_id)
         elif port_type is Port.ETHERNET_UNI:
-            prefix = "uni"
-        return prefix + "-" + str(port_no)
-
-    def update_device_status(self, connect_status=None, oper_status=None,
-            reason=None):
-        device = self.adapter_agent.get_device(self.device_id)
-        if connect_status is not None:
-            device.connect_status = connect_status
-        if oper_status is not None:
-            device.oper_status = oper_status
-        if reason is not None:
-            device.reason = reason
-        self.adapter_agent.update_device(device)
+            return ''.join([serial_number.vendor_id,
+                    self.stringify_vendor_specific(serial_number.vendor_specific)])
 
     def add_logical_port(self, port_no, intf_id):
         self.log.info('adding-logical-port', port_no=port_no)
@@ -516,26 +512,9 @@ class OpenoltDevice(object):
 
         return port_no, label
 
-    def set_oper_state(self, new_state):
-        if self.oper_state != new_state:
-	    if new_state == 'up':
-	        self.update_device_status(connect_status=ConnectStatus.REACHABLE,
-		        oper_status=OperStatus.ACTIVE,
-		        reason='OLT indication - operation state up')
-	    elif new_state == 'down':
-	        self.update_device_status(connect_status=ConnectStatus.REACHABLE,
-		        oper_status=OperStatus.FAILED,
-		        reason='OLT indication - operation state down')
-            else:
-	        raise ValueError('Invalid oper_state in olt_indication')
-
-            self.oper_state = new_state
-
     def new_onu_id(self, intf_id):
         onu_id = None
-        # onu_id is unique per PON.
-        # FIXME - Remove hardcoded limit on ONUs per PON (64)
-        for i in range(1, 64):
+        for i in range(1, 512):
             key = OnuKey(intf_id=intf_id, onu_id=i)
             if key not in self.onus:
                 onu_id = i
@@ -544,14 +523,14 @@ class OpenoltDevice(object):
 
     def stringify_vendor_specific(self, vendor_specific):
         return ''.join(str(i) for i in [
-                ord(vendor_specific[0])>>4 & 0x0f,
-                ord(vendor_specific[0]) & 0x0f,
-                ord(vendor_specific[1])>>4 & 0x0f,
-                ord(vendor_specific[1]) & 0x0f,
-                ord(vendor_specific[2])>>4 & 0x0f,
-                ord(vendor_specific[2]) & 0x0f,
-                ord(vendor_specific[3])>>4 & 0x0f,
-                ord(vendor_specific[3]) & 0x0f])
+                hex(ord(vendor_specific[0])>>4 & 0x0f)[2:],
+                hex(ord(vendor_specific[0]) & 0x0f)[2:],
+                hex(ord(vendor_specific[1])>>4 & 0x0f)[2:],
+                hex(ord(vendor_specific[1]) & 0x0f)[2:],
+                hex(ord(vendor_specific[2])>>4 & 0x0f)[2:],
+                hex(ord(vendor_specific[2]) & 0x0f)[2:],
+                hex(ord(vendor_specific[3])>>4 & 0x0f)[2:],
+                hex(ord(vendor_specific[3]) & 0x0f)[2:]])
 
     def lookup_key(self, serial_number):
         key = None
@@ -566,7 +545,7 @@ class OpenoltDevice(object):
 
     def update_flow_table(self, flows):
         device = self.adapter_agent.get_device(self.device_id)
-        self.log.info('update flow table', flows=flows)
+        self.log.debug('update flow table')
 
         for flow in flows:
             self.log.info('flow-details', device_id=self.device_id, flow=flow)
@@ -690,6 +669,11 @@ class OpenoltDevice(object):
                     intf_id = self.intf_id_from_port_num(classifier_info['in_port'])
                     onu_id = self.onu_id_from_port_num(classifier_info['in_port'])
                     self.divide_and_add_flow(intf_id, onu_id, classifier_info, action_info)
+                #else:
+                #    self.log.info('ignore downstream flow', flow=flow,
+                #            classifier_info=classifier_info,
+                #            action_info=action_info)
+
             except Exception as e:
                 self.log.exception('failed-to-install-flow', e=e, flow=flow)
 
@@ -817,7 +801,7 @@ class OpenoltDevice(object):
         self.stub.FlowAdd(flow)
         time.sleep(0.1) # FIXME
 
-    def add_dhcp_trap(intf_id, onu_id, self, classifier, action):
+    def add_dhcp_trap(self, intf_id, onu_id, classifier, action):
 
         self.log.info('add dhcp trap', classifier=classifier, action=action)
 
