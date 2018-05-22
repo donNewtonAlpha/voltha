@@ -22,6 +22,7 @@ import collections
 from twisted.internet import reactor
 from scapy.layers.l2 import Ether, Dot1Q
 import binascii
+from transitions import Machine
 
 from voltha.protos.device_pb2 import Port, Device
 from voltha.protos.common_pb2 import OperStatus, AdminState, ConnectStatus
@@ -46,6 +47,12 @@ OpenoltDevice represents an OLT.
 """
 class OpenoltDevice(object):
 
+    states = ['up', 'down']
+    transitions = [
+            { 'trigger': 'olt_up', 'source': 'down', 'dest': 'up', 'before': 'olt_indication_up' },
+            { 'trigger': 'olt_down', 'source': 'up', 'dest': 'down', 'before': 'olt_indication_down' }
+    ]
+
     def __init__(self, **kwargs):
         super(OpenoltDevice, self).__init__()
 
@@ -64,6 +71,13 @@ class OpenoltDevice(object):
         device.connect_status = ConnectStatus.REACHABLE
         device.oper_status = OperStatus.ACTIVATING
         self.adapter_agent.update_device(device)
+
+        # Initialize the OLT state machine
+        self.machine = Machine(model=self, states=OpenoltDevice.states,
+                transitions=OpenoltDevice.transitions,
+                send_event=True, initial='down', ignore_invalid_triggers=True)
+        self.machine.add_transition(trigger='olt_ind_up', source='down', dest='up')
+        self.machine.add_transition(trigger='olt_ind_loss', source='up', dest='down')
 
         # Initialize gRPC
         self.channel = grpc.insecure_channel(self.host_and_port)
@@ -106,18 +120,16 @@ class OpenoltDevice(object):
                 reactor.callFromThread(self.packet_indication, ind.pkt_ind)
 
     def olt_indication(self, olt_indication):
+        if olt_indication.oper_state == "up":
+            self.olt_up(ind=olt_indication)
+        elif olt_indication.oper_state == "down":
+            self.olt_down(ind=olt_indication)
+
+    def olt_indication_up(self, event):
+        olt_indication = event.kwargs.get('ind', None)
 	self.log.debug("olt indication", olt_ind=olt_indication)
 
-        # FIXME
-        if olt_indication.oper_state == "down":
-	    self.log.error("ignore olt oper state down", olt_ind=olt_indication)
-            return
-
-        if not hasattr(olt_indication, 'mac') or \
-                not olt_indication.mac:
-            mac = '00:00:00:00:00:' + '{:02x}'.format(self.device_num)
-        else:
-            mac = olt_indication.mac
+        dpid = '00:00:' + self.ip_hex(self.host_and_port.split(":")[0])
 
         # Create logical OF device
         ld = LogicalDevice(
@@ -133,7 +145,7 @@ class OpenoltDevice(object):
                 )
             )
         )
-        ld_initialized = self.adapter_agent.create_logical_device(ld, dpid=mac)
+        ld_initialized = self.adapter_agent.create_logical_device(ld, dpid=dpid)
         self.logical_device_id = ld_initialized.id
 
         # Update phys OF device
@@ -142,6 +154,9 @@ class OpenoltDevice(object):
         device.oper_status = OperStatus.ACTIVE
         self.adapter_agent.update_device(device)
 
+    def olt_indication_down(self, event):
+        olt_indication = event.kwargs.get('ind', None)
+	self.log.debug("olt indication", olt_ind=olt_indication)
 
     def intf_indication(self, intf_indication):
 	self.log.debug("intf indication", intf_id=intf_indication.intf_id,
@@ -471,3 +486,14 @@ class OpenoltDevice(object):
                     self.flow_mgr.add_flow(flow, is_down_stream)
                 except Exception as e:
                     self.log.exception('failed-to-install-flow', e=e, flow=flow)
+
+    # There has to be a better way to do this
+    def ip_hex(self, ip):
+        octets = ip.split(".")
+        hex_ip = []
+        for octet in octets:
+            octet_hex = hex(int(octet))
+            octet_hex = octet_hex.split('0x')[1]
+            octet_hex = octet_hex.rjust(2, '0')
+            hex_ip.append(octet_hex)
+        return ":".join(hex_ip)
