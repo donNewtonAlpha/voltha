@@ -308,7 +308,9 @@ class DeviceAgent(object):
         self.log.debug('updating-device', device=device.id)
         self.last_data = device  # so that we don't propagate back
         self.proxy.update('/', device)
-        if device.oper_status == OperStatus.ACTIVE and device.connect_status == ConnectStatus.REACHABLE:
+        if device.admin_state == AdminState.ENABLED and \
+           device.oper_status == OperStatus.ACTIVE and \
+           device.connect_status == ConnectStatus.REACHABLE:
             self.log.info('replay-create-interfaces ', device=device.id)
             self.core.xpon_agent.replay_interface(device.id)
             # if device accepts bulk flow update, lets just call that
@@ -320,7 +322,6 @@ class DeviceAgent(object):
                     device=device,
                     flows=flows,
                     groups=groups)
-
 
     def update_device_pm_config(self, device_pm_config, init=False):
         self.callback_data = init# so that we don't push init data
