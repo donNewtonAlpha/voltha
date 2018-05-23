@@ -36,7 +36,7 @@ spec:
     spec:
       containers:
       - name: voltha
-        image: docker-repo.dev.atl.foundry.att.com:5000/voltha-voltha:1.0.1-nic_ont_fix
+        image: docker-repo.dev.atl.foundry.att.com:5000/voltha-voltha:gold.5.23
         #image: voltha-voltha:latest
         imagePullPolicy: IfNotPresent
         ports:
