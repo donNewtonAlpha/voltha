@@ -549,8 +549,24 @@ class BroadcomOnuHandler(object):
 
     def delete(self, device):
         self.log.info('delete-onu')
-        # The device is already deleted in delete_v_ont_ani(). No more
-        # handling needed here
+
+        # construct message
+        # MIB Reset - OntData - 0
+        if device is None or device.connect_status != ConnectStatus.REACHABLE:
+            self.log.error('device-unreachable')
+            returnValue(None)
+
+        self.send_mib_reset()
+        yield self.wait_for_response()
+        self.proxy_address = device.proxy_address
+        self.adapter_agent.unregister_for_proxied_messages(device.proxy_address)
+
+        ports = self.adapter_agent.get_ports(self.device_id, Port.PON_ONU)
+        if ports is not None:
+            for port in ports:
+                if port.label == 'PON port':
+                    self.adapter_agent.delete_port(self.device_id, port)
+                    break
 
     @inlineCallbacks
     def update_flow_table(self, device, flows):
