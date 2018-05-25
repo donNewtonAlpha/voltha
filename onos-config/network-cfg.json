@@ -9,7 +9,7 @@
         "driver" : "pmc-olt"
       }
     },
-    "of:"000000000a4001ce" : {
+    "of:000000000a4001ce" : {
       "basic" : {
         "driver" : "pmc-olt"
       },
