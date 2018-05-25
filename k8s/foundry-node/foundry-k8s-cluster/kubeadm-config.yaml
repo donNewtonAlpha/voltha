@@ -1,0 +1,21 @@
+apiVersion: kubeadm.k8s.io/v1alpha1
+kind: MasterConfiguration
+api:
+  advertiseAddress: 0.0.0.0
+etcd:
+  endpoints:
+  - http://master0:2379
+  - http://master1:2379
+  - http://master2:2379
+apiServerExtraArgs:
+  endpoint-reconciler-type: lease
+apiServerCertSANs:
+  - "master0"
+  - "master1"
+  - "master2"
+  - "10.64.1.168"
+  - "10.64.1.148"
+  - "10.64.1.197"
+  - "127.0.0.1"
+token: "tcx0ge.di6v9e9ue1729xtd"
+tokenTTL: "0"

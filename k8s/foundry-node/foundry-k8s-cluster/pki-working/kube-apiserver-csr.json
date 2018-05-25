@@ -1,0 +1,33 @@
+{
+  "CN": "kube-apiserver",
+  "key": {
+    "algo": "rsa",
+    "size": 2048
+  },
+  "names": [
+    {
+      "C": "US",
+      "L": "Atlanta",
+      "O": "Kubernetes",
+      "OU": "AT&T VOLTHA",
+      "ST": "Georgia"
+    }
+  ],
+  "hosts": [
+      "kubernetes", 
+      "kubernetes.default", 
+      "kubernetes.default.svc", 
+      "kubernetes.default.svc.cluster.local",
+      "master0",
+      "master1",
+      "master2",
+      "kube-03",
+      "kube-04",
+      "kube-05",
+      "10.96.0.1",
+      "10.64.1.168",
+      "10.64.1.148",
+      "10.64.1.197",
+      "127.0.0.1"
+  ]
+}
