@@ -6,6 +6,7 @@
 # Ubuntu 16.04 patched and updated and on the network, internet.  
 #
 # Note the IP and hostnames as will be used later in configs
+# Run all of this as root
 #
 
 
@@ -26,6 +27,7 @@ cd foundry-k8s-cluster
 ### including master names
 # EDIT hosts-append to reflect 3 hosts IP addresses
 # TODO: script this
+## edit references to masterX to reflect your the 3 ip addresses
 vi hosts-append
 cat hosts-append >> /etc/hosts
 
@@ -90,9 +92,10 @@ curl -o /usr/local/bin/cfssljson https://pkg.cfssl.org/R1.2/cfssljson_linux-amd6
 chmod 755 /usr/local/bin/cfssl*
 
 ##
-## EDIT kube-apiserver-kubelet-client-csr.json to reflect local environment IP and hostnames
+## EDIT kube-apiserver-csr.json to reflect local environment IP and hostnames
+## leave references to masterX, kubernetes, and 10.96 ip addresses.  
 ## TODO: script this
-vi kube-apiserver-kubelet-client-csr.json
+vi kube-apiserver-csr.json
 
 # ca for apiserver, kubelet, kubectl
 cfssl gencert -initca ca-csr.json | cfssljson -bare ca
