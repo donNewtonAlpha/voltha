@@ -8,11 +8,15 @@
 # Note the IP and hostnames as will be used later in configs
 # Run all of this as root
 #
+# Each host is referred below by their new alias that will be added to /etc/hosts, 
+# master0, master1, and master2.  Their existing hostnames will remain.  Note each of their IP 
+# addresses and which will be assigned their respective master role.
+#
 
 
 
 #
-# ALL 3 HOSTS
+# ALL 3 HOSTS.  master0, master1, and master2
 #
 
 # scp from outside host the build package, foundry-k8s-cluster.tgz  
@@ -25,14 +29,17 @@ cd foundry-k8s-cluster
 
 
 ### including master names
-# EDIT hosts-append to reflect 3 hosts IP addresses
+# EDIT hosts-append to reflect the 3 master hosts IP addresses
 # TODO: script this
-## edit references to masterX to reflect your the 3 ip addresses
+## edit references to master0, master1, and master2 to reflect your the 3 ip addresses for each.
+# leave existing hostsnames in /etc/hosts
+#
 vi hosts-append
 cat hosts-append >> /etc/hosts
 
 
-### put kube-dns nameservers using either dhcp or static method.  figure out which
+### put kube-dns nameservers using either dhcp or static method.  figure out which you need based on your environment
+## TODO: script this
 cat dhclient-append >> /etc/dhcp/dhclient.conf
 # or
 #cat dns-nameservers >> /etc/network/interfaces
@@ -46,47 +53,54 @@ cat resolvconf-base >> /etc/resolvconf/resolv.conf.d/base
 #
 # get docker-ce
 #
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
+add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
 
 #
 # get k8s
 #
-curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
-sudo cat <<EOF >/etc/apt/sources.list.d/kubernetes.list
+curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
+cat <<EOF >/etc/apt/sources.list.d/kubernetes.list
 deb http://apt.kubernetes.io/ kubernetes-xenial main
 EOF
 
 
-sudo apt update
-sudo apt install docker-ce kubelet kubeadm kubectl -y
+apt update
+apt install docker-ce kubelet kubeadm kubectl -y
 
 
 ## allow insecure docker repos
-sudo cat <<EOF > /etc/docker/daemon.json
+cat <<EOF > /etc/docker/daemon.json
 {
   "insecure-registries":[ "docker-repo.dev.atl.foundry.att.com:5000" ]
 }
 EOF
 
-sudo systemctl restart docker
-sudo usermod -aG docker foundry
+systemctl restart docker
+# replace foundry with your local login user
+usermod -aG docker foundry
 
 # restart all 3
 reboot
 
 
 
+##
+## Relogin to all 3 hosts, and sudo bash to root again
+##
+
+
 #
-# SINGLE HOST
+# SINGLE HOST. Just from master0
 #
 
 ##
 ## prep certs. 
 ##
-cd foundry-k8s-cluster/pki-working/
+cd ~/foundry-k8s-cluster/pki-working/
 
-# manually download cfssl toolkit as its not on apt.  install in /usr/local/bin#
+# manually download cfssl toolkit as its not on apt.  install in /usr/local/bin
+#
 curl -o /usr/local/bin/cfssl https://pkg.cfssl.org/R1.2/cfssl_linux-amd64
 curl -o /usr/local/bin/cfssljson https://pkg.cfssl.org/R1.2/cfssljson_linux-amd64
 chmod 755 /usr/local/bin/cfssl*
@@ -94,7 +108,9 @@ chmod 755 /usr/local/bin/cfssl*
 ##
 ## EDIT kube-apiserver-csr.json to reflect local environment IP and hostnames
 ## leave references to masterX, kubernetes, and 10.96 ip addresses.  
+## Under the section hosts, verify the hostnames master0, master1, and master2 remain, the many kubernetes aliases remain, and 10.96.0.1.
 ## TODO: script this
+## 
 vi kube-apiserver-csr.json
 
 # ca for apiserver, kubelet, kubectl
@@ -127,26 +143,40 @@ mv front-proxy-client.pem front-proxy-client.crt
 
 cd ..
 
-# copy all the keys/certs to all 3 hosts
+# copy all the keys/certs to all 3 hosts from master0
+#
 scp pki-working/* foundry@master1:~/foundry-k8s-cluster/pki-working/
 scp pki-working/* foundry@master2:~/foundry-k8s-cluster/pki-working/
 
 
 
 #
-# ALL 3 HOSTS
+# ALL 3 HOSTS.  master0, master1, and master2
 #
 
+cd ~/foundry-k8s-cluster
 mkdir -p /etc/kubernetes/pki
 cp pki-working/* /etc/kubernetes/pki
 
-## WHERE X is the master node number 0, 1 ,2, per each host
+## Copy to each respective master host its one corresponding master etcd yaml file. 
+## master0 should get master0-etcd.yaml,  master1 gets master1-etcd.yaml etc. 
+## Do not give any one master multiples etcd yaml files!
+##
 ## TODO: Script this
-cp masterX-etcd.yaml /etc/kubernetes/manifests/
+# master0
+cp master0-etcd.yaml /etc/kubernetes/manifests/
+# master1
+cp master1-etcd.yaml /etc/kubernetes/manifests/
+# master2
+cp master2-etcd.yaml /etc/kubernetes/manifests/
 
 ##
 ## EDIT kubeadm-config.yaml to reflect local environment IP and hostnames
-## TODO
+## Under the section apiServerCertSANs verify the hostnames master0, master1, and master2 remain. 
+## Leave 127.0.0.1, replace the other IP addresses with the 3 for your environment.  
+## Add in your 3 master's IP addresses and pre-existing hostnames.
+## TODO script this
+##
 vi kubeadm-config.yaml
 
 ## MANUAL KUBEADM METHOD 
@@ -155,34 +185,35 @@ kubeadm alpha phase kubeconfig all --config kubeadm-config.yaml
 kubeadm alpha phase controlplane all --config kubeadm-config.yaml
 systemctl start kubelet
 
-# OR KUBEADM INIT way...
-#kubeadm init --ignore-preflight-errors=ExternalEtcdVersion --config=kubeadm-config.yaml
-#kubectl taint nodes --all node-role.kubernetes.io/master-
-
 
 ### WAIT UNTIL DOCKER LOOKS good.  TBD what good means...
+# full docker container list with all columns
 docker ps
 
+# 2 second refresh
 #watch -n2 docker ps
 
+# list only the command and status columns
 docker ps --format '{{.Command}} {{.Status}}'
 
-# wait till all 3 hosts are stable with these 5 containers
+# wait till all 3 hosts are stable with these 4 containers
+# each master should have its own individual etcd, master0, master1, and master2
 #
 #  "kube-apiserver --en…" Up About a minute
-#  "/usr/local/bin/kube…" Up 4 minutes
 #  "etcd --name=master0…" Up 13 minutes
 #  "kube-scheduler --le…" Up 13 minutes
 #  "kube-controller-man…" Up 14 minutes
 
 
 # docker logs <container-id> to investigate
+# docker inspect <container-id> to get the containers configuration state.  Look for LogPath to find the container's logging
 
+# Check /var/log/syslog as kubelet will log there its attempts and running the static containers in /etc/kubernetes/manifests
 
 
 
 #
-# SINGLE HOST
+# SINGLE HOST. Just from master0
 #
 kubeadm config upload from-flags 
 kubeadm alpha phase bootstrap-token cluster-info /etc/kubernetes/admin.conf
@@ -211,9 +242,9 @@ kubectl apply -f calico-2.6.8-k8setcd.yaml
 
 
 #
-# ALL 3 HOSTS
+# ALL 3 HOSTS.  master0, master1, and master2
 #
-# this was already done on one, do on the other 2 so kubectl works
+# this was already done on master0, do on the other 2 masters so kubectl works on them if needed
 mkdir ~/.kube/
 cp /etc/kubernetes/admin.conf ~/.kube/config
 chown -R foundry:foundry /home/foundry
@@ -228,7 +259,7 @@ dig @10.96.0.10 kubernetes.default.svc.cluster.local
 
 
 #
-# SINGLE HOST
+# SINGLE HOST. Just from master0
 #
 ## tools
 wget https://github.com/projectcalico/calicoctl/releases/download/v2.0.5/calicoctl
@@ -269,10 +300,13 @@ helm update
 ##
 git clone https://gerrit.opencord.org/helm-charts
 
-# foundry specific values
+# foundry specific values, currently dockers images from the foundry docker-repo
+#
 cp values.yaml helm-charts/voltha/
+
 ## remove freeradius templates
 rm voltha/templates/freeradius*
+
 
 cd helm-charts
 helm dep build voltha
@@ -298,9 +332,13 @@ helm install --name onos-voltha -f configs/onos-voltha.yaml onos
 #
 # voltha/admin
 # ssh -p 5022 voltha@vcli.voltha.svc.cluster.local
+#   devices 
+#   table should say empty
 #
 # karaf/karaf
 # ssh -p 8101 karaf@onos-voltha-ssh.voltha.svc.cluster.local
+#   apps -s -a
+#   should list the installed apps
 
 
 
