@@ -77,7 +77,7 @@ class BroadcomOnuAdapter(object):
         self.descriptor = Adapter(
             id=self.name,
             vendor='Voltha project',
-            version='0.44',
+            version='0.45',
             config=AdapterConfig(log_level=LogLevel.INFO)
         )
         self.devices_handlers = dict()  # device_id -> BroadcomOnuHandler()
@@ -309,6 +309,7 @@ class BroadcomOnuAdapter(object):
     def unsuppress_alarm(self, filter):
         raise NotImplementedError()
 
+
 class BroadcomOnuHandler(object):
 
     def __init__(self, adapter, device_id):
@@ -473,7 +474,6 @@ class BroadcomOnuHandler(object):
 
         # Handle next event
         reactor.callLater(0, self.handle_onu_events)
-
 
     def activate(self, device):
         self.log.info('activating')
@@ -1006,6 +1006,8 @@ class BroadcomOnuHandler(object):
                                              entity_id,
                                              vlan_id,
                                              fwd_operation):
+        vlan_filter_list = [0] * 12
+        vlan_filter_list[0] = vlan_id
         frame = OmciFrame(
             transaction_id=self.get_tx_id(),
             message_type=OmciCreate.message_id,
@@ -1013,7 +1015,7 @@ class BroadcomOnuHandler(object):
                 entity_class=VlanTaggingFilterData.class_id,
                 entity_id=entity_id,
                 data=dict(
-                    vlan_filter_0=vlan_id,
+                    vlan_filter_list=vlan_filter_list,
                     forward_operation=fwd_operation,
                     number_of_entries=1
                 )
@@ -1024,8 +1026,10 @@ class BroadcomOnuHandler(object):
     def send_set_vlan_tagging_filter_data(self,
                                           entity_id,
                                           vlan_id):
+        vlan_filter_list = [0] * 12
+        vlan_filter_list[0] = vlan_id
         data = dict(
-            vlan_filter_0=vlan_id,
+            vlan_filter_list=vlan_filter_list,
             forward_operation=0x10,
             number_of_entries=1
         )
@@ -1544,8 +1548,6 @@ class BroadcomOnuHandler(object):
         self.send_set_multicast_operations_profile_ds_igmp_mcast_tci(0x201, 4, cvid)
         yield self.wait_for_response()
 
-
-
     def add_uni_port(self, device, parent_logical_device_id,
                      name, parent_port_num=None):
         self.log.info('adding-logical-port', device_id=device.id,
@@ -1610,7 +1612,6 @@ class BroadcomOnuHandler(object):
         self.adapter_agent.delete_port(self.device_id, port)
         self.adapter_agent.delete_logical_port_by_id(parent_logical_device_id,
                                                      'uni-{}'.format(port_no))
-
 
     @inlineCallbacks
     def delete_v_ont_ani(self, data):
