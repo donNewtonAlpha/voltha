@@ -4,7 +4,11 @@ logging:
     formatters:
       brief:
         format: '%(message)s'
+#  Added line no information  20180530
       default:
+        format: '%(asctime)s.%(msecs)03d %(levelname)-8s %(threadName)s %(module)s.%(funcName)s - [line %(lineno)s] - %(message)s'
+        datefmt: '%Y%m%dT%H%M%S'
+      default_orig:
         format: '%(asctime)s.%(msecs)03d %(levelname)-8s %(threadName)s %(module)s.%(funcName)s %(message)s'
         datefmt: '%Y%m%dT%H%M%S'
 
