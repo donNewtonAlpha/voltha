@@ -195,7 +195,7 @@ ssh -p 8101 karaf@<onos-cluster-IP>
 
 ### VOLTHA CORE DONE ### 
 
-
+### PONSIM IF NEEDED ###
 
 ## deploy ponsim if needed.  WARNING USES LOTS OF CPU AND DISK USAGE FOR LOGGING. WILL CAUSE EVICTED CONTAINERS
 
@@ -208,4 +208,21 @@ kubectl apply -f foundry-node/onu_repo.yml
 kubectl delete -f foundry-node/olt_repo.yml
 kubectl delete -f foundry-node/onu_repo.yml 
 
+### PONSIM DONE ###
 
+### TO BUILD CONTAINERS ###
+
+sudo apt-get update
+sudo apt-get install build-essential virtualenv python-dev python-pip python libssl-dev libpcap-dev python-netifaces \
+python-virtualenv python-urllib3 python-nose python-flake8 python-scapy
+
+cd ~/source/voltha
+
+. env.sh
+
+make install-protoc
+
+# For all containers
+make build
+# Just the voltha container
+make build voltha
