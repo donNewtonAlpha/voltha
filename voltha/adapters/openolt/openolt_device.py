@@ -64,18 +64,22 @@ class OpenoltDevice(object):
         self.adapter_agent = kwargs['adapter_agent']
         self.device_num = kwargs['device_num']
         device = kwargs['device']
+        is_reconciliation = kwargs.get('reconciliation', False)
         self.device_id = device.id
         self.host_and_port = device.host_and_port
         self.log = structlog.get_logger(id=self.device_id, ip=self.host_and_port)
         self.nni_oper_state = dict() #intf_id -> oper_state
         self.proxy = registry('core').get_proxy('/')
 
-        # Update device
-        device.root = True
-        device.serial_number = self.host_and_port # FIXME
-        device.connect_status = ConnectStatus.REACHABLE
-        device.oper_status = OperStatus.ACTIVATING
-        self.adapter_agent.update_device(device)
+        # Device already set in the event of reconciliation
+        if not is_reconciliation:
+            # It is a new device
+            # Update device
+            device.root = True
+            device.serial_number = self.host_and_port # FIXME
+            device.connect_status = ConnectStatus.REACHABLE
+            device.oper_status = OperStatus.ACTIVATING
+            self.adapter_agent.update_device(device)
 
         # Initialize the OLT state machine
         self.machine = Machine(model=self, states=OpenoltDevice.states,
@@ -102,6 +106,9 @@ class OpenoltDevice(object):
         self.heartbeat_miss = 0
         self.heartbeat_signature = None
         self.heartbeat_thread.start()
+
+        self.log.debug('openolt-device-created', device_id=self.device_id)
+
 
     def process_indications(self):
 
@@ -756,3 +763,46 @@ class OpenoltDevice(object):
     def stringify_serial_number(self, serial_number):
         return ''.join([serial_number.vendor_id,
                                      self.stringify_vendor_specific(serial_number.vendor_specific)])
+
+    def disable(self):
+        self.log.info('sending-deactivate-olt-message', device_id=self.device_id)
+
+        # Send grpc call
+        #self.stub.DeactivateOlt(openolt_pb2.Empty())
+
+        # Soft deactivate. Turning down hardware should remove flows, but we are not doing that presently
+
+        # Bring OLT down
+        self.olt_down(oper_state=OperStatus.UNKNOWN, admin_state=AdminState.DISABLED,
+                      connect_state = ConnectStatus.UNREACHABLE)
+
+
+    def delete(self):
+        self.log.info('delete-olt', device_id=self.device_id)
+
+        # Stop the grpc communication threads
+        self.log.info('stopping-grpc-threads', device_id=self.device_id)
+        self.indications_thread_active = False
+        self.heartbeat_thread_active = False
+
+        # Close the grpc channel
+        # self.log.info('unsubscribing-grpc-channel', device_id=self.device_id)
+        # self.channel.unsubscribe()
+
+        self.log.info('successfully-deleted-olt', device_id=self.device_id)
+
+    def reenable(self):
+        self.log.info('reenable-olt', device_id=self.device_id)
+
+        # Bring up OLT
+        self.olt_up()
+
+        # Enable all child devices
+        self.log.info('enabling-child-devices', device_id=self.device_id)
+        self.log.info('enabling-child-devices', olt_device_id=self.device_id)
+        self.adapter_agent.update_child_devices_state(parent_device_id=self.device_id,
+                                                     admin_state=AdminState.ENABLED)
+
+        # Set all ports to enabled
+        self.log.info('enabling-all-ports', device_id=self.device_id)
+        self.adapter_agent.enable_all_ports(self.device_id)

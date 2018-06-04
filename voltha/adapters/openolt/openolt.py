@@ -101,7 +101,26 @@ class OpenoltAdapter(object):
 
     def reconcile_device(self, device):
         log.info('reconcile-device', device=device)
-        raise NotImplementedError()
+        kwargs = {
+            'adapter_agent': self.adapter_agent,
+            'device': device,
+            'device_num': self.num_devices + 1,
+            'reconciliation': True
+        }
+        try:
+            reconciled_device = OpenoltDevice(**kwargs)
+            log.debug('reconciled-device-recreated', device_id=reconciled_device.device_id)
+            self.devices[device.id] = reconciled_device
+        except Exception as e:
+            log.error('Failed to reconcile OpenOLT device', error=e, exception_type=type(e).__name__)
+            del self.devices[device.id]
+            raise
+        else:
+            self.num_devices += 1
+            # Invoke the children reconciliation which would setup the
+            # basic children data structures
+            self.adapter_agent.reconcile_child_devices(device.id)
+            return device
 
     def abandon_device(self, device):
         log.info('abandon-device', device=device)
@@ -109,11 +128,13 @@ class OpenoltAdapter(object):
 
     def disable_device(self, device):
         log.info('disable-device', device=device)
-        raise NotImplementedError()
+        handler = self.devices[device.id]
+        handler.disable()
 
     def reenable_device(self, device):
         log.info('reenable-device', device=device)
-        raise NotImplementedError()
+        handler = self.devices[device.id]
+        handler.reenable()
 
     def reboot_device(self, device):
         log.info('reboot_device', device=device)
@@ -145,7 +166,9 @@ class OpenoltAdapter(object):
 
     def delete_device(self, device):
         log.info('delete-device', device=device)
-        raise NotImplementedError()
+        handler = self.devices[device.id]
+        handler.delete()
+        del self.devices[device.id]
 
     def get_device_details(self, device):
         log.debug('get_device_details', device=device)
