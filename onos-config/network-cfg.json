@@ -17,6 +17,15 @@
         "uplink" : "129",
         "vlan" : "11"
       }
+    },
+    "of:000000000af20b15" : {
+      "basic" : {
+        "driver" : "pmc-olt"
+      },
+      "accessDevice" : {
+        "uplink" : "129",
+        "vlan" : "10"
+      }
     }
   },
   "apps" : {

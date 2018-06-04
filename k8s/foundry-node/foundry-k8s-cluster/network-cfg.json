@@ -9,13 +9,22 @@
         "driver" : "pmc-olt"
       }
     },
-    "of:0000a82bb53678ae" : {
+    "of:000000000a4001ce" : {
       "basic" : {
         "driver" : "pmc-olt"
       },
       "accessDevice" : {
-        "uplink" : "128",
+        "uplink" : "129",
         "vlan" : "11"
+      }
+    },
+    "of:000000000af20b15" : {
+      "basic" : {
+        "driver" : "pmc-olt"
+      },
+      "accessDevice" : {
+        "uplink" : "129",
+        "vlan" : "10"
       }
     }
   },
