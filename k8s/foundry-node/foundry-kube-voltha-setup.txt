@@ -219,10 +219,9 @@ python-virtualenv python-urllib3 python-nose python-flake8 python-scapy
 cd ~/source/voltha
 
 . env.sh
-
 make install-protoc
-
-# For all containers
 make build
-# Just the voltha container
+
+# Next time if you just want to rebuild the voltha container
+. env.sh
 make build voltha
