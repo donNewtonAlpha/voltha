@@ -10,7 +10,9 @@ then
   echo ""
   echo "install etcdctl in your environment before attempting this script"
   echo "you can get it by copying from an etcd k8s container, for example"
-  echo "kubectl cp kube-system/etcd-0:/usr/local/bin/etcdctl /usr/local/bin"
+  echo ""
+  echo "sudo kubectl cp voltha/etcd-0:/usr/local/bin/etcdctl /usr/local/bin"
+  echo "sudo chmod 755 /usr/local/bin/etcdctl"
   echo ""
   echo "exiting"
   exit 1
