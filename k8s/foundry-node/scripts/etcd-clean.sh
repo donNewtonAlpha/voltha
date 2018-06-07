@@ -54,7 +54,8 @@ else
 fi
 
 
-sleep 2
+echo "waiting to restart apps..."
+sleep 5
 
 kubectl apply -f $repopath/vcore_for_etcd_repo.yml 
 kubectl apply -f $repopath/envoy_for_etcd_repo.yml

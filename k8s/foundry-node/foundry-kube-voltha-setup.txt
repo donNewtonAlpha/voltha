@@ -14,22 +14,16 @@ reboot
 # get docker-ce
 #
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-
 sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
-sudo apt update
-sudo apt install docker-ce
 
 #
 # get k8s
 #
 curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
-
-sudo cat <<EOF >/etc/apt/sources.list.d/kubernetes.list
-deb http://apt.kubernetes.io/ kubernetes-xenial main
-EOF
+sudo add-apt-repository "deb http://apt.kubernetes.io/ kubernetes-xenial main"
 
 sudo apt update
-sudo apt install kubelet kubeadm kubectl
+sudo apt install docker-ce kubelet kubeadm kubectl -y
 
 
 sudo systemctl start docker
@@ -225,3 +219,6 @@ make build
 # Next time if you just want to rebuild the voltha container
 . env.sh
 make build voltha
+
+
+
