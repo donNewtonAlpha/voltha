@@ -23,9 +23,10 @@
 # contains config, yaml, json files for certs, scripts, etc
 # upack in ~/
 
-sudo bash
+cd ~/
 tar -zxvf foundry-k8s-cluster.tgz
 cd foundry-k8s-cluster
+sudo bash
 
 
 ### including master names
@@ -38,15 +39,11 @@ vi hosts-append
 cat hosts-append >> /etc/hosts
 
 
-### put kube-dns nameservers using either dhcp or static method.  figure out which you need based on your environment
-## TODO: script this
-cat dhclient-append >> /etc/dhcp/dhclient.conf
-# or
-#cat dns-nameservers >> /etc/network/interfaces
+### put kube-dns nameservers using resolvconf template method. 
+cat resolvconf-head >> /etc/resolvconf/resolv.conf.d/head
 
-## add dns lookup opts
+## add dns lookup opts 
 cat resolvconf-base >> /etc/resolvconf/resolv.conf.d/base
-
 
 
 ### install base docker, kubelet, kubadm, etc
@@ -59,11 +56,8 @@ add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(
 #
 # get k8s
 #
-curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
-cat <<EOF >/etc/apt/sources.list.d/kubernetes.list
-deb http://apt.kubernetes.io/ kubernetes-xenial main
-EOF
-
+curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+sudo add-apt-repository "deb http://apt.kubernetes.io/ kubernetes-xenial main"
 
 apt update
 apt install docker-ce kubelet kubeadm kubectl -y
@@ -304,11 +298,11 @@ git clone https://gerrit.opencord.org/helm-charts
 #
 cp values.yaml helm-charts/voltha/
 
+cd helm-charts
+
 ## remove freeradius templates
 rm voltha/templates/freeradius*
 
-
-cd helm-charts
 helm dep build voltha
 helm install -n voltha --set etcd-operator.customResources.createEtcdClusterCRD=false voltha
 
