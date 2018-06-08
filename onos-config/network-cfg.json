@@ -2,7 +2,7 @@
   "devices" : {
     "of:000000000a4001cd" : {
       "accessDevice" : {
-        "uplink" : "129",
+        "uplink" : "128",
         "vlan" : "10"
       },
       "basic" : {
@@ -14,7 +14,7 @@
         "driver" : "pmc-olt"
       },
       "accessDevice" : {
-        "uplink" : "129",
+        "uplink" : "128",
         "vlan" : "11"
       }
     },
@@ -23,7 +23,7 @@
         "driver" : "pmc-olt"
       },
       "accessDevice" : {
-        "uplink" : "129",
+        "uplink" : "128",
         "vlan" : "10"
       }
     }
@@ -31,7 +31,7 @@
   "apps" : {
     "org.opencord.dhcpl2relay" : {
       "dhcpl2relay" : {
-        "dhcpServerConnectPoints" : [ "of:000000000a4001cd/129" ]
+        "dhcpServerConnectPoints" : [ "of:000000000a4001cd/128" ]
       }
     },
     "org.opencord.aaa" : {
