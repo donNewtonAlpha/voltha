@@ -18,16 +18,17 @@ from datetime import datetime, timedelta
 from transitions import Machine
 from twisted.internet import reactor
 from voltha.extensions.omci.omci_frame import OmciFrame
-from voltha.extensions.omci.omci_defs import EntityOperations, ReasonCodes
+from voltha.extensions.omci.omci_defs import EntityOperations, ReasonCodes, \
+    AttributeAccess
 from voltha.extensions.omci.omci_cc import OmciCCRxEvents, OMCI_CC, TX_REQUEST_KEY, \
     RX_RESPONSE_KEY
 from voltha.extensions.omci.omci_entities import OntData
 from common.event_bus import EventBusClient
 
-
 RxEvent = OmciCCRxEvents
 OP = EntityOperations
 RC = ReasonCodes
+AA = AttributeAccess
 
 
 class MibSynchronizer(object):
@@ -161,6 +162,16 @@ class MibSynchronizer(object):
 
     def __str__(self):
         return 'MIBSynchronizer: Device ID: {}, State:{}'.format(self._device_id, self.state)
+
+    def delete(self):
+        """
+        Cleanup any state information
+        """
+        self.stop()
+        db, self._database = self._database, None
+
+        if db is not None:
+            db.remove(self._device_id)
 
     @property
     def device_id(self):
@@ -302,7 +313,7 @@ class MibSynchronizer(object):
             self._current_task = None
 
             # Examine MDS value
-            if self._mib_data_sync == onu_mds_value:
+            if self.mib_data_sync == onu_mds_value:
                 self._deferred = reactor.callLater(0, self.success)
             else:
                 self._deferred = reactor.callLater(0, self.mismatch)
@@ -362,7 +373,6 @@ class MibSynchronizer(object):
             try:
                 # Need to update the ONU accordingly
                 if self._attr_diffs is not None:
-                    assert self._attr_diffs is not None, 'Should match'
                     step = 'attribute-update'
                     pass    # TODO: Perform the 'set' commands needed
 
@@ -375,11 +385,11 @@ class MibSynchronizer(object):
                     #
                     #    For instance, no one may set the gal_loopback_configuration
                     #    in the GEM Interworking Termination point since its default
-                    #    values is '0' disable, but when we audit, the ONU will report zer
+                    #    values is '0' disable, but when we audit, the ONU will report zero.
                     #
                     #    A good way to perhaps fix this is to update our database with the
                     #    default.  Or perhaps set all defaults in the database in the first
-                    #    place when we do the initial create/set
+                    #    place when we do the initial create/set.
                     #
                     pass  # TODO: Perform 'delete' commands as needed, see 'default' note above
 
@@ -413,7 +423,7 @@ class MibSynchronizer(object):
                 self._current_task = None
 
                 # Examine MDS value
-                if self._mib_data_sync == onu_mds_value:
+                if self.mib_data_sync == onu_mds_value:
                     self._deferred = reactor.callLater(0, self.success)
                 else:
                     self._device.mib_db_in_sync = False
@@ -551,7 +561,7 @@ class MibSynchronizer(object):
 
     def on_mib_upload_response(self, _topic, msg):
         """
-        Process a Set response
+        Process a MIB Upload response
 
         :param _topic: (str) OMCI-RX topic
         :param msg: (dict) Dictionary with 'rx-response' and 'tx-request' (if any)
@@ -562,6 +572,7 @@ class MibSynchronizer(object):
             # Check if expected in current mib_sync state
             if self.state == 'resynchronizing':
                 # The resync task handles this
+                # TODO: Remove this subscription if we never do anything with the response
                 return
 
             if self.state != 'uploading':
@@ -569,7 +580,7 @@ class MibSynchronizer(object):
 
     def on_mib_upload_next_response(self, _topic, msg):
         """
-        Process a Set response
+        Process a MIB Upload Next response
 
         :param _topic: (str) OMCI-RX topic
         :param msg: (dict) Dictionary with 'rx-response' and 'tx-request' (if any)
@@ -651,10 +662,51 @@ class MibSynchronizer(object):
                     if created:
                         self.increment_mib_data_sync()
 
+                    # If the ME contains set-by-create or writeable values that were
+                    # not specified in the create command, the ONU will have
+                    # initialized those fields
+
+                    if class_id in self._device.me_map:
+                        sbc_w_set = {attr.field.name for attr in self._device.me_map[class_id].attributes
+                                     if (AA.SBC in attr.access or AA.W in attr.access)
+                                     and attr.field.name != 'managed_entity_id'}
+
+                        missing = sbc_w_set - {k for k in attributes.iterkeys()}
+
+                        if len(missing):
+                            # Request the missing attributes
+                            self.update_sbc_w_items(class_id, entity_id, missing)
+
             except KeyError as e:
                 pass            # NOP
+
             except Exception as e:
                 self.log.exception('create', e=e)
+
+    def update_sbc_w_items(self, class_id, entity_id, missing_attributes):
+        """
+        Perform a get-request for Set-By-Create (SBC) or writable (w) attributes
+        that were not specified in the original Create request.
+
+        :param class_id: (int) Class ID
+        :param entity_id: (int) Instance ID
+        :param missing_attributes: (set) Missing SBC or Writable attribute
+        """
+        if len(missing_attributes) and class_id in self._device.me_map:
+            from voltha.extensions.omci.tasks.omci_get_request import OmciGetRequest
+
+            def success(results):
+                self._database.set(self._device_id, class_id, entity_id, results.attributes)
+
+            def failure(reason):
+                self.log.warn('update-sbc-w-failed', reason=reason, class_id=class_id,
+                              entity_id=entity_id, attributes=missing_attributes)
+
+            d = self._device.task_runner.queue_task(OmciGetRequest(self._agent, self._device_id,
+                                                                   self._device.me_map[class_id],
+                                                                   entity_id, missing_attributes,
+                                                                   allow_failure=True))
+            d.addCallbacks(success, failure)
 
     def on_delete_response(self, _topic, msg):
         """
@@ -730,8 +782,10 @@ class MibSynchronizer(object):
                     attributes = {k: v for k, v in omci_msg['data'].items()}
 
                     # Save to the database
-                    self._database.set(self._device_id, class_id, entity_id, attributes)
-                    self.increment_mib_data_sync()
+                    modified = self._database.set(self._device_id, class_id, entity_id, attributes)
+
+                    if modified:
+                        self.increment_mib_data_sync()
 
             except KeyError as e:
                 pass            # NOP
@@ -763,10 +817,14 @@ class MibSynchronizer(object):
 
         :return: (dict) The value(s) requested. If class/inst/attribute is
                         not found, an empty dictionary is returned
-        :raises DatabaseStateError: If the database is not enabled
+        :raises DatabaseStateError: If the database is not enabled or does not exist
         """
+        from voltha.extensions.omci.database.mib_db_api import DatabaseStateError
+
         self.log.debug('query', class_id=class_id,
                        instance_id=instance_id, attributes=attributes)
+        if self._database is None:
+            raise DatabaseStateError('Database does not yet exist')
 
         return self._database.query(self._device_id, class_id=class_id,
                                     instance_id=instance_id,
