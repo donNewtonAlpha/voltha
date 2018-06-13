@@ -24,6 +24,10 @@
     <version>fake</version>
 
     <properties>
+        <config.version>1.4.0</config.version>
+        <dhcpl2relay.version>1.4.0</dhcpl2relay.version>
+        <sadis.version>2.1.0</sadis.version>
+<!--
         <aaa.version>1.6.0-SNAPSHOT</aaa.version>
         <config.version>1.4.0-SNAPSHOT</config.version>
         <dhcpl2relay.version>1.4.0-SNAPSHOT</dhcpl2relay.version>
@@ -31,6 +35,7 @@
         <mcast.version>1.4.0-SNAPSHOT</mcast.version>
         <olt.version>1.4.0-SNAPSHOT</olt.version>
         <sadis.version>2.1.0-SNAPSHOT</sadis.version>
+-->
     </properties>
 
     <build>
@@ -48,6 +53,7 @@
                             <type>oar</type>
                             <overWrite>true</overWrite>
                         </artifactItem>
+<!--
                         <artifactItem>
                             <groupId>org.opencord</groupId>
                             <artifactId>mcast</artifactId>
@@ -62,6 +68,7 @@
                             <type>oar</type>
                             <overWrite>true</overWrite>
                         </artifactItem>
+-->
                         <artifactItem>
                             <groupId>org.opencord</groupId>
                             <artifactId>sadis-app</artifactId>
@@ -69,6 +76,7 @@
                             <type>oar</type>
                             <overWrite>true</overWrite>
                         </artifactItem>
+<!--
                         <artifactItem>
                             <groupId>org.opencord</groupId>
                             <artifactId>aaa</artifactId>
@@ -83,6 +91,7 @@
                             <type>oar</type>
                             <overWrite>true</overWrite>
                         </artifactItem>
+-->
                         <artifactItem>
                             <groupId>org.opencord</groupId>
                             <artifactId>dhcpl2relay</artifactId>
