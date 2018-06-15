@@ -40,10 +40,14 @@ cat hosts-append >> /etc/hosts
 
 
 ### put kube-dns nameservers using resolvconf template method. 
-cat resolvconf-head >> /etc/resolvconf/resolv.conf.d/head
+## Add the k8s resolver into the top of the hosts resolver search list
+## the actual resolver will be installed below.
+echo "nameserver 10.96.0.10" >> /etc/resolvconf/resolv.conf.d/head
 
 ## add dns lookup opts 
-cat resolvconf-base >> /etc/resolvconf/resolv.conf.d/base
+## Also lower the timeout and attempts so the system default resolver is attempted quicker
+## in the event the k8s resolver isnt responding
+echo "options ndots:5 timeout:1 attempts:1" >> /etc/resolvconf/resolv.conf.d/base
 
 
 ### install base docker, kubelet, kubadm, etc
