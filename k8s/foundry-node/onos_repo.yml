@@ -35,7 +35,7 @@ spec:
     spec:
       containers:
         - name: onos
-          image: "docker-repo.dev.atl.foundry.att.com:5000/voltha-onos:gold.6.13"
+          image: "docker-repo.dev.atl.foundry.att.com:5000/voltha-onos:gold.6.18"
           volumeMounts:
           - name: onos-net-config
             mountPath: /root/onos/config/network-cfg.json
