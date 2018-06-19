@@ -14,6 +14,9 @@ sudo rm -r /var/lib/voltha-runtime/zookeeper/data/*
 sudo rm -r /var/lib/voltha-runtime/zookeeper/datalog/*
 sudo rm -r /var/lib/voltha-runtime/grafana/data/*
 
+echo "waiting to restart apps..."
+sleep 5
+
 #Reapply/recreate containers
 kubectl apply -f $srcpath/k8s/foundry-node/zookeeper_persist.yml
 kubectl apply -f $srcpath/k8s/foundry-node/kafka_persist.yml
