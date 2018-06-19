@@ -24,7 +24,8 @@
 # upack in ~/
 
 cd ~/
-tar -zxvf foundry-k8s-cluster.tgz
+git clone https://github.com/donNewtonAlpha/voltha.git
+ln -s ~/voltha/k8s/foundry-node/foundry-k8s-cluster
 cd foundry-k8s-cluster
 sudo bash
 
@@ -37,17 +38,6 @@ sudo bash
 #
 vi hosts-append
 cat hosts-append >> /etc/hosts
-
-
-### put kube-dns nameservers using resolvconf template method. 
-## Add the k8s resolver into the top of the hosts resolver search list
-## the actual resolver will be installed below.
-echo "nameserver 10.96.0.10" >> /etc/resolvconf/resolv.conf.d/head
-
-## add dns lookup opts 
-## Also lower the timeout and attempts so the system default resolver is attempted quicker
-## in the event the k8s resolver isnt responding
-echo "options ndots:5 timeout:1 attempts:1" >> /etc/resolvconf/resolv.conf.d/base
 
 
 ### install base docker, kubelet, kubadm, etc
@@ -242,6 +232,21 @@ kubectl apply -f calico-2.6.8-k8setcd.yaml
 #
 # ALL 3 HOSTS.  master0, master1, and master2
 #
+
+### put kube-dns nameservers using resolvconf template method. 
+## Add the k8s resolver into the top of the hosts resolver search list
+## the actual resolver will be installed below.
+echo "nameserver 10.96.0.10" >> /etc/resolvconf/resolv.conf.d/head
+
+## add dns lookup opts 
+## Also lower the timeout and attempts so the system default resolver is attempted quicker
+## in the event the k8s resolver isnt responding
+echo "options ndots:5 timeout:1 attempts:1" >> /etc/resolvconf/resolv.conf.d/base
+
+# make the /etc/resolv.conf change take effect
+resolvconf -u
+
+
 # this was already done on master0, do on the other 2 masters so kubectl works on them if needed
 mkdir ~/.kube/
 cp /etc/kubernetes/admin.conf ~/.kube/config
@@ -251,7 +256,7 @@ chown -R foundry:foundry /home/foundry
 # DO NOT PROCEED UNTIL ALL 3 HOSTS can resolve the dig command below
 # verify ALL PODS are running
 kubectl get pods --all-namespaces
-dig @10.96.0.10 kubernetes.default.svc.cluster.local
+dig kubernetes.default.svc.cluster.local
 
 
 
@@ -261,7 +266,7 @@ dig @10.96.0.10 kubernetes.default.svc.cluster.local
 #
 ## tools
 wget https://github.com/projectcalico/calicoctl/releases/download/v2.0.5/calicoctl
-kubectl cp kube-system/master0-etcd-kube-03:/usr/local/bin/etcdctl .
+kubectl cp kube-system/master0-etcd-$(hostname):/usr/local/bin/etcdctl .
 chmod 755 etcdctl calicoctl
 mv etcdctl calicoctl /usr/local/bin/
 
@@ -310,12 +315,13 @@ rm voltha/templates/freeradius*
 helm dep build voltha
 helm install -n voltha --set etcd-operator.customResources.createEtcdClusterCRD=false voltha
 
-## THIS WILL TAKE A LONG TIME
+## THIS WILL TAKE A LONG TIME, but the shell returns
 # check status with
 kubectl get pod --all-namespaces
 helm status voltha
 
 ## UNDO the install.  due to an etcd-operator bug:  https://github.com/kubernetes/charts/issues/5328
+## THIS TOO WILL TAKE A LONG TIME, and block the shell
 helm delete --purge voltha    
 
 # reinstall really this time
@@ -323,7 +329,67 @@ helm install -n voltha voltha
 helm install --name onos-voltha -f configs/onos-voltha.yaml onos
 
 
+##
+## Verify whole cluster.  The pods should look very similar to below:
+##
+
+kubectl get pods --all-namespaces -o wide
+
+##  
+##  NAMESPACE     NAME                                                          READY     STATUS    RESTARTS   AGE       IP                NODE
+##  default       etcd-cluster-0000                                             1/1       Running   0          3m        192.168.77.158    kube-08
+##  default       etcd-cluster-0001                                             1/1       Running   0          2m        192.168.183.26    kube-06
+##  default       etcd-cluster-0002                                             1/1       Running   0          1m        192.168.252.246   kube-07
+##  default       voltha-etcd-operator-etcd-backup-operator-6855ffbf4c-8z4zl    1/1       Running   0          4m        192.168.252.242   kube-07
+##  default       voltha-etcd-operator-etcd-operator-565cd6946b-plr4b           1/1       Running   0          4m        192.168.77.153    kube-08
+##  default       voltha-etcd-operator-etcd-restore-operator-58466c4567-w5hl5   1/1       Running   0          4m        192.168.183.19    kube-06
+##  default       voltha-kafka-0                                                1/1       Running   2          4m        192.168.252.244   kube-07
+##  default       voltha-kafka-1                                                1/1       Running   0          2m        192.168.183.25    kube-06
+##  default       voltha-kafka-2                                                1/1       Running   0          1m        192.168.77.160    kube-08
+##  default       voltha-zookeeper-0                                            1/1       Running   0          4m        192.168.183.24    kube-06
+##  default       voltha-zookeeper-1                                            1/1       Running   0          3m        192.168.252.245   kube-07
+##  default       voltha-zookeeper-2                                            1/1       Running   0          3m        192.168.77.159    kube-08
+##  kube-system   calico-kube-controllers-5cc6fcf4d9-4tfss                      1/1       Running   1          20m       10.64.1.102       kube-08
+##  kube-system   calico-node-7xb6p                                             2/2       Running   2          20m       10.64.1.162       kube-06
+##  kube-system   calico-node-8gw7s                                             2/2       Running   2          20m       10.64.1.152       kube-07
+##  kube-system   calico-node-xsvgb                                             2/2       Running   2          20m       10.64.1.102       kube-08
+##  kube-system   kube-apiserver-kube-06                                        1/1       Running   21         41m       10.64.1.162       kube-06
+##  kube-system   kube-apiserver-kube-07                                        1/1       Running   21         1h        10.64.1.152       kube-07
+##  kube-system   kube-apiserver-kube-08                                        1/1       Running   21         1h        10.64.1.102       kube-08
+##  kube-system   kube-controller-manager-kube-06                               1/1       Running   5          41m       10.64.1.162       kube-06
+##  kube-system   kube-controller-manager-kube-07                               1/1       Running   5          55m       10.64.1.152       kube-07
+##  kube-system   kube-controller-manager-kube-08                               1/1       Running   6          40m       10.64.1.102       kube-08
+##  kube-system   kube-dns-86f4d74b45-hk5ps                                     3/3       Running   3          21m       192.168.77.139    kube-08
+##  kube-system   kube-dns-86f4d74b45-p6rqb                                     3/3       Running   3          20m       192.168.252.220   kube-07
+##  kube-system   kube-dns-86f4d74b45-pqv8j                                     3/3       Running   3          20m       192.168.183.17    kube-06
+##  kube-system   kube-proxy-7bxr6                                              1/1       Running   1          21m       10.64.1.102       kube-08
+##  kube-system   kube-proxy-9xr54                                              1/1       Running   1          21m       10.64.1.152       kube-07
+##  kube-system   kube-proxy-rstbh                                              1/1       Running   1          21m       10.64.1.162       kube-06
+##  kube-system   kube-scheduler-kube-06                                        1/1       Running   6          41m       10.64.1.162       kube-06
+##  kube-system   kube-scheduler-kube-07                                        1/1       Running   6          41m       10.64.1.152       kube-07
+##  kube-system   kube-scheduler-kube-08                                        1/1       Running   7          56m       10.64.1.102       kube-08
+##  kube-system   master0-etcd-kube-06                                          1/1       Running   9          41m       10.64.1.162       kube-06
+##  kube-system   master1-etcd-kube-07                                          1/1       Running   8          55m       10.64.1.152       kube-07
+##  kube-system   master2-etcd-kube-08                                          1/1       Running   9          41m       10.64.1.102       kube-08
+##  kube-system   tiller-deploy-5c688d5f9b-5mqrt                                1/1       Running   1          15m       192.168.252.217   kube-07
+##  voltha        dashd-57cdb689cc-b8l9k                                        1/1       Running   3          4m        192.168.77.156    kube-08
+##  voltha        default-http-backend-5c6d95c48-c7zkt                          1/1       Running   0          4m        192.168.183.22    kube-06
+##  voltha        grafana-5cbd57c584-cm2ll                                      1/1       Running   0          4m        192.168.183.20    kube-06
+##  voltha        netconf-6b9f65df49-kc4ck                                      1/1       Running   0          4m        192.168.252.240   kube-07
+##  voltha        nginx-ingress-controller-566c84c9fd-fl8wm                     1/1       Running   0          4m        192.168.252.243   kube-07
+##  voltha        ofagent-5b9d98975b-wnlzt                                      1/1       Running   0          4m        192.168.183.21    kube-06
+##  voltha        onos-voltha-6676c46bbc-z6srd                                  1/1       Running   0          3m        192.168.77.157    kube-08
+##  voltha        shovel-688ff789cc-7zltw                                       1/1       Running   2          4m        192.168.183.23    kube-06
+##  voltha        vcli-67587c7988-bch42                                         1/1       Running   0          4m        192.168.77.154    kube-08
+##  voltha        vcore-7c6b898789-zvfxn                                        1/1       Running   0          4m        192.168.252.241   kube-07
+##  voltha        voltha-65cc8fd59f-k66z5                                       1/1       Running   1          4m        192.168.77.155    kube-08
+
+
+
 # TODO:  properly inject onos config for olt, aaa, and sadis
+# for now just run curl shell script to inject needed config
+cd ..
+./netcfg-update.sh
 
 
 # verify cluster operation
