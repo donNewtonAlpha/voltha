@@ -934,7 +934,7 @@ class OpenoltDevice(object):
 
     def update_flow_table(self, flows):
         device = self.adapter_agent.get_device(self.device_id)
-        self.log.debug('update flow table')
+        self.log.debug('update flow table', number_of_flows=len(flows))
         in_port = None
 
         for flow in flows:
