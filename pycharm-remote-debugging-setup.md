@@ -36,9 +36,9 @@ cp /opt/pycharm-2018.1.4/debug-eggs/pycharm-debug.egg ~/source/voltha
 
 Also in order for the IDE to properly link and reference the the egg, add it as a "Content Root"
 
-Click File -> Settings 
-Under Project: voltha
-  Project Structure
+Click File -> Settings  
+Under Project: voltha  
+  Project Structure  
 
  \+ Add Content Root
 
