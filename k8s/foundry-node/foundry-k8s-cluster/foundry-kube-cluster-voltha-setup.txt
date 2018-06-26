@@ -322,12 +322,9 @@ kubectl get pods --all-namespaces -o wide
 
 ##  
 ##  NAMESPACE     NAME                                                          READY     STATUS    RESTARTS   AGE       IP                NODE
-##  default       etcd-cluster-0000                                             1/1       Running   0          3m        192.168.77.158    kube-08
-##  default       etcd-cluster-0001                                             1/1       Running   0          2m        192.168.183.26    kube-06
-##  default       etcd-cluster-0002                                             1/1       Running   0          1m        192.168.252.246   kube-07
-##  default       voltha-etcd-operator-etcd-backup-operator-6855ffbf4c-8z4zl    1/1       Running   0          4m        192.168.252.242   kube-07
-##  default       voltha-etcd-operator-etcd-operator-565cd6946b-plr4b           1/1       Running   0          4m        192.168.77.153    kube-08
-##  default       voltha-etcd-operator-etcd-restore-operator-58466c4567-w5hl5   1/1       Running   0          4m        192.168.183.19    kube-06
+##  default       etcd-cluster-0                                                1/1       Running   0          1m        192.168.252.246   kube-07
+##  default       etcd-cluster-1                                                1/1       Running   0          3m        192.168.77.158    kube-08
+##  default       etcd-cluster-2                                                1/1       Running   0          2m        192.168.183.26    kube-06
 ##  default       voltha-kafka-0                                                1/1       Running   2          4m        192.168.252.244   kube-07
 ##  default       voltha-kafka-1                                                1/1       Running   0          2m        192.168.183.25    kube-06
 ##  default       voltha-kafka-2                                                1/1       Running   0          1m        192.168.77.160    kube-08
