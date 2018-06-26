@@ -16,14 +16,13 @@ with the proper env file sources, proto's build and docker images able to be cre
 
 This creates a runtime configuration that runs the remote debugger process rather than a local python process.
 
-Tools -> Edit Configurations
-Click +, Add a Python Remote Debug configuration
-Name it
-Set Local host name to 0.0.0.0   This causes the debug server to listen on all IP
-Set Listen Port to 4444
-Path mappings: /home/matt/source/voltha=/voltha 
+Tools -> Edit Configurations  
+Click +, Add a Python Remote Debug configuration and name whatever makes sense  
+Set Local host name to 0.0.0.0   This causes the debug server to listen on all IP  
+Set Listen Port to 4444  
+Path mappings: /home/foundry/source/voltha=/voltha   
 
-Apply/OK
+Apply/OK  
 
 
 
@@ -38,7 +37,7 @@ Click File -> Settings
 Under Project: voltha
   Project Structure
 
-+ Add Content Root
+ \+ Add Content Root
 
 Navigate and select the pycharm-debug.egg file.
 
@@ -49,17 +48,18 @@ Navigate and select the pycharm-debug.egg file.
 Add the following code just below the __main__ check to connect your python client to the remote debugger.
 Get the IP of the device running your IDE and use it in the code.  In my example my desktop is on 10.64.10.146.
 
-if __name__ == '__main__':
-  import pydevd
-  pydevd.settrace('10.64.10.146', port=4444, stdoutToServer=True, stderrToServer=True)
-
+~~~
+if __name__ == '__main__':  
+  import pydevd  
+  pydevd.settrace('10.64.10.146', port=4444, stdoutToServer=True, stderrToServer=True)  
+~~~
 
 
 ## Start the remote debug process 
 
 This will start the 0.0.0.0:4444 listener on your desktop IDE, waiting for a connection.
 
-Run -> Debug 'your debug config'
+Run -> Debug 'your debug config'  
 
 
 
@@ -67,15 +67,17 @@ Run -> Debug 'your debug config'
 
 Change the docker/Docker.voltha file to copy in the new egg into the image and modify PYTHONPATH path to find it.  
 
-Make the following change:
+Make the following change:  
 
-# Bundle app source
-RUN mkdir /voltha && touch /voltha/__init__.py
-ENV PYTHONPATH=/voltha:/voltha/pycharm-debug.egg    ## Add addtional item after colon
-COPY common /voltha/common
-COPY voltha /voltha/voltha
-COPY pki /voltha/pki
-COPY pycharm-debug.egg /voltha/   ## New line
+~~~
+# Bundle app source  
+RUN mkdir /voltha && touch /voltha/__init__.py  
+ENV PYTHONPATH=/voltha:/voltha/pycharm-debug.egg    ## Add addtional item after colon  
+COPY common /voltha/common  
+COPY voltha /voltha/voltha  
+COPY pki /voltha/pki  
+COPY pycharm-debug.egg /voltha/   ## New line  
+~~~
 
 Re-run make build or docker build to create your new voltha/vcore image.   Deploy that image using your method of choice 
 (docker compose or kubectl apply)
