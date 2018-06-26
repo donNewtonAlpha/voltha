@@ -301,30 +301,15 @@ helm update
 ##
 ## install voltha and dependencies.  finally, why we are here
 ##
-git clone https://gerrit.opencord.org/helm-charts
+git clone https://github.com/donNewtonAlpha/helm-charts
 
 # foundry specific values, currently dockers images from the foundry docker-repo
 #
-cp values.yaml helm-charts/voltha/
 
 cd helm-charts
 
-## remove freeradius templates
-rm voltha/templates/freeradius*
-
+helm install etcd
 helm dep build voltha
-helm install -n voltha --set etcd-operator.customResources.createEtcdClusterCRD=false voltha
-
-## THIS WILL TAKE A LONG TIME, but the shell returns
-# check status with
-kubectl get pod --all-namespaces
-helm status voltha
-
-## UNDO the install.  due to an etcd-operator bug:  https://github.com/kubernetes/charts/issues/5328
-## THIS TOO WILL TAKE A LONG TIME, and block the shell
-helm delete --purge voltha    
-
-# reinstall really this time
 helm install -n voltha voltha
 helm install --name onos-voltha -f configs/onos-voltha.yaml onos
 
