@@ -16,7 +16,7 @@ with the proper env file sources, proto's build and docker images able to be cre
 
 This creates a runtime configuration that runs the remote debugger process rather than a local python process.
 
-Tools -> Edit Configurations  
+Click Tools -> Edit Configurations  
 Click +, Add a Python Remote Debug configuration and name whatever makes sense  
 Set Local host name to 0.0.0.0   This causes the debug server to listen on all IP  
 Set Listen Port to 4444  
@@ -30,9 +30,12 @@ Apply/OK
 
 This egg exists in the deployment home of pycharm.  In my case its in /opt, but it could be anywhere.
 
+~~~
 cp /opt/pycharm-2018.1.4/debug-eggs/pycharm-debug.egg ~/source/voltha
+~~~
 
 Also in order for the IDE to properly link and reference the the egg, add it as a "Content Root"
+
 Click File -> Settings 
 Under Project: voltha
   Project Structure
