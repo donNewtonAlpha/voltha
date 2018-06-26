@@ -82,12 +82,40 @@ COPY pki /voltha/pki
 COPY pycharm-debug.egg /voltha/   ## New line  
 ~~~
 
-Re-run make build or docker build to create your new voltha/vcore image.   Deploy that image using your method of choice 
-(docker compose or kubectl apply)
+Re-run make build, make voltha, or docker build to create your new voltha/vcore image.   
 
-When the new container is running execution will pause at the pydevd.settrace method call.  At this point the IDE will pause 
-at the __main__ section prompting you to start the debug session.   Press the play button in the Debugger window to resume the
-startup and logging of voltha.   Set breakpoints in code and inspect variables in Pycharm as needed.
+~~~
+(venv-linux) matt@ubuntu:~/source/voltha$ make voltha
+~~~
+
+The results should look similar to this
+
+~~~
+...
+ ---> a7127acf53a9
+Step 7/12 : ENV PYTHONPATH=/voltha:/voltha/pycharm-debug.egg
+...
+---> 76606cb3a31c
+Step 11/12 : COPY pycharm-debug.egg /voltha/
+...
+Successfully built 6a0fdb2b7575
+Successfully tagged voltha-voltha:latest
+~~~
+
+## Deploy and run the image
+
+Push that image to the docker repo, renaming as needed to not overwrite anyone elses "latest".  Replace my-latest-test below with your tag name.
+
+~~~
+docker tag voltha-voltha:latest docker-repo.dev.atl.foundry.att.com:5000/voltha-voltha:my-latest-test
+docker push docker-repo.dev.atl.foundry.att.com:5000/voltha-voltha:my-latest-test
+~~~
+
+Deploy and run the `docker-repo.dev.atl.foundry.att.com:5000/voltha-voltha:my-latest-test` image using your method of choice on the separate vm or machine you wish to run voltha.  
+
+You can use "docker-compose" or "kubectl apply" method of running, just edit the image location in the yaml to the tag created and uploaded in the docker-repo.  If your building voltha on the same machine your running docker/k8s, you can just reference `voltha-voltha:latest` locally.
+
+When the new container is running execution will pause at the pydevd.settrace method call, connecting via tcp/4444 to your IDE.  At this point the IDE will pause at the `__main__` section prompting you to start the debug session.   Press the play button in the Debugger window to resume the startup and logging of voltha.   Set breakpoints in code and inspect variables in Pycharm as needed.
 
 
 
