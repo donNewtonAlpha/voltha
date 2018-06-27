@@ -308,7 +308,7 @@ git clone https://github.com/donNewtonAlpha/helm-charts
 
 cd helm-charts
 
-helm install etcd
+helm install --name etcd-cluster etcd
 helm dep build voltha
 helm install -n voltha voltha
 helm install --name onos-voltha -f configs/onos-voltha.yaml onos
