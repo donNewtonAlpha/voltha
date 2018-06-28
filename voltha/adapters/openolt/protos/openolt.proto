@@ -25,6 +25,13 @@ service Openolt {
         };
     }
 
+    rpc DeactivateOnu(Onu) returns (Empty) {
+        option (google.api.http) = {
+          post: "/v1/DisableOnu"
+          body: "*"
+        };
+    }
+
     rpc OmciMsgOut(OmciMsg) returns (Empty) {
         option (google.api.http) = {
           post: "/v1/OmciMsgOut"

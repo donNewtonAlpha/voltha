@@ -398,9 +398,23 @@ class OpenoltDevice(object):
                     onu_id=onu_indication.onu_id)
 
         if onu_device is None:
-            self.log.error('onu not found', intf_id=onu_indication.intf_id,
-                           onu_id=onu_indication.onu_id)
-            return
+            # Unknown ONU
+            self.log.debug('unknown-onu',
+                           olt_device_id=self.device_id,
+                           onu_device=onu_device,
+                           onu_serial_number=onu_indication.serial_number,
+                           oper_state=onu_indication.oper_state, admin_state=onu_indication.admin_state)
+            # If admin state is up, send deactivate message
+            if onu_indication.admin_state == 'up':
+                self.log.debug('sending-deactivate-onu',
+                               olt_device_id=self.device_id,
+                               onu_device=onu_device,
+                               onu_serial_number=onu_indication.serial_number,
+                               oper_state=onu_indication.oper_state, admin_state=onu_indication.admin_state)
+                onu = openolt_pb2.Onu(intf_id=onu_indication.intf_id,
+                                      onu_id=onu_indication.onu_id,
+                                      serial_number=onu_indication.serial_number)
+                self.stub.DeactivateOnu(onu)
 
         if onu_device.connect_status != ConnectStatus.REACHABLE:
             onu_device.connect_status = ConnectStatus.REACHABLE
