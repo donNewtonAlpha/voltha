@@ -69,7 +69,6 @@ sudo mkdir -p /var/lib/voltha-runtime/fluentd
 sudo mkdir -p /var/lib/voltha-runtime/kafka
 sudo mkdir -p /var/lib/voltha-runtime/zookeeper/data
 sudo mkdir -p /var/lib/voltha-runtime/zookeeper/datalog
-sudo mkdir -p /var/lib/voltha-runtime/grafana/data
 sudo mkdir -p /var/lib/voltha-runtime/onos/config
 sudo chown -R $(id -u):$(id -g) /var/lib/voltha-runtime
 
@@ -160,8 +159,7 @@ kubectl apply -f foundry-node/ofagent_repo.yml
 kubectl apply -f foundry-node/envoy_for_etcd_repo.yml 
 kubectl apply -f foundry-node/vcli_repo.yml 
 kubectl apply -f foundry-node/netconf_repo.yml 
-kubectl apply -f foundry-node/grafana_persist.yml 
-kubectl apply -f foundry-node/stats_repo.yml 
+kubectl apply -f foundry-node/stats_repo.yml
 
 ## edit onos network config to reflect your OLT hardware.  Otherwise copy as-is
 cp ~/source/voltha/onos-config/network-cfg.json /var/lib/voltha-runtime/onos/config/
