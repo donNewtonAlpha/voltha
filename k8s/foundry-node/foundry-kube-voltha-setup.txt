@@ -193,7 +193,39 @@ ssh -p 8101 karaf@<onos-cluster-IP>
 ## type logout to exit onos shell
 
 
-### VOLTHA CORE DONE ### 
+### VOLTHA CORE DONE ###
+
+### USEFUL SCRIPTS AND ALIASES ###
+
+Add this to your .bashrc file
+
+alias purge='~/source/voltha/k8s/foundry-node/scripts/etcd-clean.sh purge'
+alias vcli='ssh -p 5022 -o StrictHostKeyChecking=no voltha@vcli.voltha.svc.cluster.local'
+alias onos='ssh-keygen -f "/home/foundry/.ssh/known_hosts" -R [onos.voltha.svc.cluster.local]:8101; ssh -p 8101 -o StrictHostKeyChecking=no karaf@onos.voltha.svc.cluster.local'
+
+
+kgp() {
+  kubectl get pods --all-namespaces
+}
+
+kvl() {
+  pod=$(kubectl get pods -n voltha |grep vcore | awk '{print $1}')
+  kubectl logs $pod -n voltha $@
+}
+
+kol() {
+  pod=$(kubectl get pods -n voltha |grep onos | awk '{print $1}')
+  kubectl logs $pod -n voltha $@
+}
+
+# purge clear etcd
+# vcli access voltha cli
+# onos access onos cli
+# kgp get kubernetes pods
+# kvl get vcore's log
+# kol get onos' log
+
+### USEFUL SCRIPTS AND ALIASES DONE ###
 
 ### PONSIM IF NEEDED ###
 
