@@ -43,7 +43,7 @@ from voltha.protos.bbf_fiber_base_pb2 import VEnetConfig
 import voltha.core.flow_decomposer as fd
 
 import openolt_platform as platform
-from openolt_flow_mgr import OpenOltFlowMgr
+from openolt_flow_mgr import OpenOltFlowMgr, DEFAULT_MGMT_VLAN
 
 MAX_HEARTBEAT_MISS = 3
 HEARTBEAT_PERIOD = 1
@@ -494,7 +494,7 @@ class OpenoltDevice(object):
                 # FIXME: that's definitely cheating
                 if onu_device.adapter == 'broadcom_onu':
                     onu_adapter_agent.adapter.devices_handlers[onu_device.id] \
-                            .message_exchange()
+                            .message_exchange(cvid=DEFAULT_MGMT_VLAN)
                     self.log.debug('broadcom-message-exchange-started')
 
             # tcont creation (onu)
@@ -757,8 +757,13 @@ class OpenoltDevice(object):
     def update_logical_port_stats(self, port_stats):
         # FIXME
         label = 'nni-{}'.format(port_stats.intf_id)
-        logical_port = self.adapter_agent.get_logical_port(
-            self.logical_device_id, label)
+        try:
+            logical_port = self.adapter_agent.get_logical_port(
+                self.logical_device_id, label)
+        except KeyError as e:
+            self.log.warn('logical port was not found, it may not have been '
+                          'created yet', exception=e)
+            logical_port = None
 
         if logical_port is None:
             self.log.error('logical-port-is-None',
