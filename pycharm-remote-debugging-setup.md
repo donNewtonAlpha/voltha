@@ -111,7 +111,11 @@ docker tag voltha-voltha:latest docker-repo.dev.atl.foundry.att.com:5000/voltha-
 docker push docker-repo.dev.atl.foundry.att.com:5000/voltha-voltha:my-latest-test
 ~~~
 
-Deploy and run the `docker-repo.dev.atl.foundry.att.com:5000/voltha-voltha:my-latest-test` image using your method of choice on the separate vm or machine you wish to run voltha.  
+Deploy and run the `docker-repo.dev.atl.foundry.att.com:5000/voltha-voltha:my-latest-test` image using your method of choice on the separate vm or machine you wish to run voltha.  To force the pulling of the new image on the vm/server you want to run voltha, run the following:
+
+~~~
+docker pull docker-repo.dev.atl.foundry.att.com:5000/voltha-voltha:my-latest-test
+~~~
 
 You can use "docker-compose" or "kubectl apply" method of running, just edit the image location in the yaml to the tag created and uploaded in the docker-repo.  If your building voltha on the same machine your running docker/k8s, you can just reference `voltha-voltha:latest` locally.
 
