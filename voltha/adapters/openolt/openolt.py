@@ -303,4 +303,4 @@ class OpenoltAdapter(object):
     def delete_child_device(self, parent_device_id, child_device):
         log.info('delete-child-device', parent_device_id=parent_device_id, child_device=child_device)
         handler = self.devices[parent_device_id]
-        handler.delete_child_device(child_device)
+        handler.delete_child_device(parent_device_id, child_device)
