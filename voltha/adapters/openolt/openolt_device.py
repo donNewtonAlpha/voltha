@@ -1051,12 +1051,12 @@ class OpenoltDevice(object):
         self.log.info('enabling-all-ports', device_id=self.device_id)
         self.adapter_agent.enable_all_ports(self.device_id)
 
-    def delete_child(self, child_device):
+    def delete_child_device(self, parent_device_id, child_device):
         self.log.debug('sending-deactivate-onu',
-                       olt_device_id=self.device_id,
+                       olt_device_id=parent_device_id,
                        onu_device=child_device,
                        onu_serial_number=child_device.serial_number)
-        onu = openolt_pb2.Onu(intf_id=child_device.intf_id,
+        onu = openolt_pb2.Onu(intf_id=child_device.channel_id,
                               onu_id=child_device.device_id,
                               serial_number=child_device.serial_number)
         self.stub.DeactivateOnu(onu)
