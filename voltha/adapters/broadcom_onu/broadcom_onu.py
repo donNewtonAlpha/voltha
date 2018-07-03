@@ -559,6 +559,7 @@ class BroadcomOnuHandler(object):
         except Exception as e:
             self.log.exception("exception-updating-port",e=e)
 
+    @inlineCallbacks
     def delete(self, device):
         self.log.info('delete-onu')
 
