@@ -168,7 +168,9 @@ class BroadcomOnuAdapter(object):
         log.info('delete-device', device_id=device.id, device_handlers=self.devices_handlers)
         if device.id in self.devices_handlers:
             handler = self.devices_handlers[device.id]
+            log.info('device-handler',handler=handler)
             if handler is not None:
+                log.info('calling-handler-delete', handler=handler)
                 handler.delete(device)
             del self.devices_handlers[device.id]
         else:
