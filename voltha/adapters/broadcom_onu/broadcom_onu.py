@@ -165,12 +165,14 @@ class BroadcomOnuAdapter(object):
         raise NotImplementedError()
 
     def delete_device(self, device):
-        log.info('delete-device', device_id=device.id)
+        log.info('delete-device', device_id=device.id, device_handlers=self.devices_handlers)
         if device.id in self.devices_handlers:
             handler = self.devices_handlers[device.id]
             if handler is not None:
                 handler.delete(device)
             del self.devices_handlers[device.id]
+        else:
+            log.warn('device-not-found-in-handlers', device=device, device_handlers=self.devices_handlers)
         return
 
     def get_device_details(self, device):
