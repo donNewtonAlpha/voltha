@@ -576,6 +576,13 @@ class BroadcomOnuHandler(object):
                     self.adapter_agent.delete_port(self.device_id, port)
                     break
 
+        onu_device = self.adapter_agent.get_device(self.device_id)
+        parent_device = self.adapter_agent.get_device(onu_device.parent_id)
+        try:
+            parent_device.delete_child(onu_device)
+        except AttributeError:
+            self.log.debug('parent-device-delete-child-not-implemented')
+
     @inlineCallbacks
     def update_flow_table(self, device, flows):
         #
