@@ -796,7 +796,10 @@ class BroadcomOnuHandler(object):
                 entity_id=entity_id
             )
         )
-        self.send_omci_message(frame)
+        try:
+            self.send_omci_message(frame)
+        except Exception as e:
+            self.log.warn('could-not-send-omci-message', omci_frame=frame)
 
     def send_create_gal_ethernet_profile(self,
                                          entity_id,
