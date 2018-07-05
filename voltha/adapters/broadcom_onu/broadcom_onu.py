@@ -565,9 +565,9 @@ class BroadcomOnuHandler(object):
 
         # construct message
         # MIB Reset - OntData - 0
-        if device is None or device.connect_status != ConnectStatus.REACHABLE:
-            self.log.error('device-unreachable')
-            returnValue(None)
+        # if device is None or device.connect_status != ConnectStatus.REACHABLE:
+        #    self.log.error('device-unreachable')
+        #    returnValue(None)
 
         self.send_mib_reset()
         yield self.wait_for_response()
