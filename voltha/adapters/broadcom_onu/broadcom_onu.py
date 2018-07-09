@@ -571,8 +571,8 @@ class BroadcomOnuHandler(object):
 
         # self.send_mib_reset()
         # yield self.wait_for_response()
-        # self.proxy_address = device.proxy_address
-        # self.adapter_agent.unregister_for_proxied_messages(device.proxy_address)
+        self.proxy_address = device.proxy_address
+        self.adapter_agent.unregister_for_proxied_messages(device.proxy_address)
 
         ports = self.adapter_agent.get_ports(self.device_id, Port.PON_ONU)
         if ports is not None:
