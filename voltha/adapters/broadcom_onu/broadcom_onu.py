@@ -569,8 +569,8 @@ class BroadcomOnuHandler(object):
         #    self.log.error('device-unreachable')
         #    returnValue(None)
 
-        self.send_mib_reset()
-        yield self.wait_for_response()
+        # self.send_mib_reset()
+        # yield self.wait_for_response()
         self.proxy_address = device.proxy_address
         self.adapter_agent.unregister_for_proxied_messages(device.proxy_address)
 
