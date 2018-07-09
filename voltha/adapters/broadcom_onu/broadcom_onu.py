@@ -581,6 +581,7 @@ class BroadcomOnuHandler(object):
                     self.adapter_agent.delete_port(self.device_id, port)
                     break
 
+        self.log.info('parent-adapter-delete-onu')
         onu_device = self.adapter_agent.get_device(self.device_id)
         parent_device = self.adapter_agent.get_device(onu_device.parent_id)
         parent_adapter = registry('adapter_loader').get_agent(parent_device.adapter)
