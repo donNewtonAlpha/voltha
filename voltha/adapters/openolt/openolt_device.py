@@ -44,6 +44,7 @@ import voltha.core.flow_decomposer as fd
 
 import openolt_platform as platform
 from openolt_flow_mgr import OpenOltFlowMgr, DEFAULT_MGMT_VLAN
+from openolt_alarms import OpenOltAlarmMgr
 
 MAX_HEARTBEAT_MISS = 3
 HEARTBEAT_PERIOD = 1
@@ -132,6 +133,7 @@ class OpenoltDevice(object):
         self.stub = openolt_pb2_grpc.OpenoltStub(self.channel)
 
         self.flow_mgr = OpenOltFlowMgr(self.log, self.stub, self.device_id)
+        self.alarm_mgr = OpenOltAlarmMgr(self.log)
 
         # Indications thread plcaholder (started by heartbeat thread)
         self.indications_thread = None
@@ -192,7 +194,8 @@ class OpenoltDevice(object):
                     reactor.callFromThread(self.flow_statistics_indication,
                                            ind.flow_stats)
                 elif ind.HasField('alarm_ind'):
-                    self.log.info('alarm indication not handled')
+                    reactor.callFromThread(self.alarm_mgr.process_alarms,
+                                           ind.alarm_ind)
                 else:
                     self.log.warn('unknown indication type')
 
@@ -1050,15 +1053,3 @@ class OpenoltDevice(object):
         # Set all ports to enabled
         self.log.info('enabling-all-ports', device_id=self.device_id)
         self.adapter_agent.enable_all_ports(self.device_id)
-
-    def delete_child_device(self, child_device):
-        self.log.debug('sending-deactivate-onu',
-                       olt_device_id=self.device_id,
-                       onu_device=child_device,
-                       onu_serial_number=child_device.serial_number)
-        onu = openolt_pb2.Onu(intf_id=child_device.channel_id,
-                              onu_id=child_device.device_id,
-                              serial_number=child_device.serial_number)
-        self.stub.DeactivateOnu(onu)
-
-        #self.adapter_agent.delete_child_device(self.device_id, child_device.device_id)
