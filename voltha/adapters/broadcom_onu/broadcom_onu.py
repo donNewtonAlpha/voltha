@@ -586,7 +586,7 @@ class BroadcomOnuHandler(object):
         #             break
 
         self.log.info('parent-adapter-delete-onu')
-        onu_device = self.adapter_agent.get_device(self.device_id)
+        onu_device = device
         self.log('onu-device',onu_device=onu_device)
         parent_device = self.adapter_agent.get_device(onu_device.parent_id)
         self.log('parent-device', parent_device=parent_device)
