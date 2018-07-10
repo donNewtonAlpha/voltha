@@ -821,7 +821,9 @@ class AdapterAgent(object):
                 '/devices', device.id, device)
 
     def delete_child_device(self, parent_device_id, child_device_id):
+        self.log.info('getting-onu-device', child_device_id=child_device_id)
         onu_device = self.root_proxy.get('/devices/{}'.format(child_device_id))
+        self.log.info('onu-device', onu_device=onu_device)
         if onu_device is not None:
             if onu_device.parent_id == parent_device_id:
                 self.log.debug('deleting-child-device',
