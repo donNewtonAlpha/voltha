@@ -592,7 +592,7 @@ class BroadcomOnuHandler(object):
         parent_adapter = registry('adapter_loader').get_agent(parent_device.adapter)
         self.log.info('parent-adapter', parent_adapter=parent_adapter)
         try:
-            parent_adapter.delete_child_device(parent_device.id, device)
+            parent_adapter.delete_child_device(parent_device.id, device.id)
         except AttributeError:
             self.log.debug('parent-device-delete-child-not-implemented')
 
