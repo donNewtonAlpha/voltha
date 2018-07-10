@@ -1059,7 +1059,7 @@ class OpenoltDevice(object):
                        olt_device_id=self.device_id,
                        onu_device=child_device,
                        onu_serial_number=child_device.serial_number)
-        onu = openolt_pb2.Onu(intf_id=child_device.intf_id,
+        onu = openolt_pb2.Onu(intf_id=child_device.proxy_address.channel_id,
                               onu_id=child_device.device_id,
                               serial_number=child_device.serial_number)
         self.stub.DeactivateOnu(onu)
