@@ -562,7 +562,7 @@ class BroadcomOnuHandler(object):
 
     @inlineCallbacks
     def delete(self, device):
-        self.log.info('delete-onu')
+        self.log.info('delete-onu', device=device)
 
         # construct message
         # MIB Reset - OntData - 0
