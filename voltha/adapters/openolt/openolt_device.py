@@ -1059,9 +1059,12 @@ class OpenoltDevice(object):
                        olt_device_id=self.device_id,
                        onu_device=child_device,
                        onu_serial_number=child_device.serial_number)
+        vendor_id = child_device.vendor_id.encode('hex')
+        vendor_specific = child_device.serial_number.replace(child_device.vendor_id,'').encode('hex')
+        serial_number = openolt_pb2.SerialNumber(vendor_id=vendor_id, vendor_specific=vendor_specific)
         onu = openolt_pb2.Onu(intf_id=child_device.proxy_address.channel_id,
                               onu_id=child_device.proxy_address.onu_id,
-                              serial_number=child_device.serial_number)
+                              serial_number=serial_number)
         self.log.debug('onu-protobuf', onu=onu)
         self.stub.DeactivateOnu(onu)
 
