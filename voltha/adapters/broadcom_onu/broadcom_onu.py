@@ -587,8 +587,11 @@ class BroadcomOnuHandler(object):
 
         self.log.info('parent-adapter-delete-onu')
         onu_device = self.adapter_agent.get_device(self.device_id)
+        self.log('onu-device',onu_device=onu_device)
         parent_device = self.adapter_agent.get_device(onu_device.parent_id)
+        self.log('parent-device', parent_device=parent_device)
         parent_adapter = registry('adapter_loader').get_agent(parent_device.adapter)
+        self.log('parent-adapter', parent_adapter=parent_adapter)
         try:
             parent_adapter.delete_child_device(parent_device.id, onu_device)
         except AttributeError:
