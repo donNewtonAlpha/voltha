@@ -1,0 +1,5 @@
+rm *.key
+rm *.crt
+rm *.pub
+rm *.csr
+rm *.pem

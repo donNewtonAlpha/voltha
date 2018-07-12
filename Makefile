@@ -148,7 +148,7 @@ FETCH_K8S_IMAGE_LIST = \
 
 FETCH_IMAGE_LIST = $(shell echo $(FETCH_BUILD_IMAGE_LIST) $(FETCH_COMPOSE_IMAGE_LIST) $(FETCH_K8S_IMAGE_LIST) | tr ' ' '\n' | sort -u)
 
-.PHONY: $(DIRS) $(DIRS_CLEAN) $(DIRS_FLAKE8) flake8 base voltha ofagent netconf shovel onos dashd cli portainer grafana nginx consul envoy go-builder envoyd tools opennms logstash unum ponsim start stop tag push pull
+.PHONY: $(DIRS) $(DIRS_CLEAN) $(DIRS_FLAKE8) flake8 base voltha ofagent netconf shovel onos dashd cli portainer grafana nginx consul envoy go-builder envoyd tools opennms logstash unum start stop tag push pull
 
 # This should to be the first and default target in this Makefile
 help:

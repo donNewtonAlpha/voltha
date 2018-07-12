@@ -1,0 +1,73 @@
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: etcd
+  namespace: voltha
+spec:
+  clusterIP: None
+  selector:
+    app: etcd
+  ports:
+  - name: client
+    port: 2379
+    targetPort: 2379
+  - name: peer
+    port: 2380
+    targetPort: 2380
+
+
+---
+
+apiVersion: apps/v1beta1
+kind: StatefulSet
+metadata:
+  name: "etcd"
+  namespace: voltha
+  labels:
+    app: "etcd"
+spec:
+  serviceName: "etcd"
+  replicas: 1
+  template:
+    metadata:
+      name: "etcd"
+      namespace: voltha
+      labels:
+        app: "etcd"
+    spec:
+      volumes:
+      - name: etcd-data
+        hostPath:
+          path: /var/lib/voltha-runtime/etcd
+          type: Directory
+      containers:
+      - name: "etcd"
+        image: "quay.io/coreos/etcd:v3.2.13"
+
+        ports:
+        - containerPort: 2379
+          name: client
+        - containerPort: 2380
+          name: peer
+        volumeMounts:
+        - name: etcd-data
+          mountPath: /var/lib/etcd
+        command:
+          - "/bin/sh"
+          - "-ecx"
+          - |
+
+            exec etcd --name ${HOSTNAME} \
+              --listen-peer-urls http://0.0.0.0:2380 \
+              --listen-client-urls http://0.0.0.0:2379 \
+              --advertise-client-urls http://etcd.voltha.svc.cluster.local:2379 \
+              --data-dir /var/lib/etcd \
+              --initial-advertise-peer-urls http://${HOSTNAME}:2380 \
+              --initial-cluster-token etcd-cluster-1 \
+              --initial-cluster ${HOSTNAME}=http://${HOSTNAME}:2380 \
+              --initial-cluster-state new \
+              --debug
+
+---

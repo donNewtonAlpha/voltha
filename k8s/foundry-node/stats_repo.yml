@@ -1,0 +1,65 @@
+#
+# The dashd deployment
+#
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: dashd
+  namespace: voltha
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: dashd
+      annotations:
+        cni: "calico"
+    spec:
+      containers:
+      - name: dashd
+        image: docker-repo.dev.atl.foundry.att.com:5000/voltha-dashd:1.0
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        args:
+        - "/dashd/dashd/main.py"
+        - "--kafka=kafka.$(NAMESPACE).svc.cluster.local"
+        - "--consul=consul:8500"
+        - "--grafana_url=http://admin:admin@grafana.$(NAMESPACE).svc.cluster.local:80/api"
+        - "--topic=voltha.kpis"
+---
+#
+# The shovel deployment
+#
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: shovel
+  namespace: voltha
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: shovel
+      annotations:
+        cni: "calico"
+    spec:
+      containers:
+      - name: shovel
+        image: docker-repo.dev.atl.foundry.att.com:5000/voltha-shovel:1.0
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        args:
+        - "/shovel/shovel/main.py"
+        - "--kafka=kafka.$(NAMESPACE).svc.cluster.local"
+        - "--consul=consul:8500"
+        - "--host=grafana.$(NAMESPACE).svc.cluster.local"
+        - "--topic=voltha.kpis"

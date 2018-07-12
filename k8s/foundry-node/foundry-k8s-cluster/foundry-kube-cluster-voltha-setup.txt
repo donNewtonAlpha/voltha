@@ -1,0 +1,391 @@
+#
+# KUBERNETES 3 SERVER CLUSTER BUILD NOTES/SCRIPT
+#
+#
+# Requires three hosts.  8 cpu, 8gb memory, 40GB disk.  
+# Ubuntu 16.04 patched and updated and on the network, internet.  
+#
+# Note the IP and hostnames as will be used later in configs
+# Run all of this as root
+#
+# Each host is referred below by their new alias that will be added to /etc/hosts, 
+# master0, master1, and master2.  Their existing hostnames will remain.  Note each of their IP 
+# addresses and which will be assigned their respective master role.
+#
+
+
+
+#
+# ALL 3 HOSTS.  master0, master1, and master2
+#
+
+# scp from outside host the build package, foundry-k8s-cluster.tgz  
+# contains config, yaml, json files for certs, scripts, etc
+# upack in ~/
+
+cd ~/
+git clone https://github.com/donNewtonAlpha/voltha.git
+ln -s ~/voltha/k8s/foundry-node/foundry-k8s-cluster
+cd foundry-k8s-cluster
+sudo bash
+
+
+### including master names
+# EDIT hosts-append to reflect the 3 master hosts IP addresses
+# TODO: script this
+## edit references to master0, master1, and master2 to reflect your the 3 ip addresses for each.
+# leave existing hostsnames in /etc/hosts
+#
+vi hosts-append
+cat hosts-append >> /etc/hosts
+
+
+### install base docker, kubelet, kubadm, etc
+#
+# get docker-ce
+#
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
+add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+
+#
+# get k8s
+#
+curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+sudo add-apt-repository "deb http://apt.kubernetes.io/ kubernetes-xenial main"
+
+apt update
+apt install docker-ce kubelet kubeadm kubectl -y
+
+
+## allow insecure docker repos
+cat <<EOF > /etc/docker/daemon.json
+{
+  "insecure-registries":[ "docker-repo.dev.atl.foundry.att.com:5000" ]
+}
+EOF
+
+systemctl restart docker
+# replace foundry with your local login user
+usermod -aG docker foundry
+
+# restart all 3
+reboot
+
+
+
+##
+## Relogin to all 3 hosts, and sudo bash to root again
+##
+
+
+#
+# SINGLE HOST. Just from master0
+#
+
+##
+## prep certs. 
+##
+cd ~/foundry-k8s-cluster/pki-working/
+
+# manually download cfssl toolkit as its not on apt.  install in /usr/local/bin
+#
+curl -o /usr/local/bin/cfssl https://pkg.cfssl.org/R1.2/cfssl_linux-amd64
+curl -o /usr/local/bin/cfssljson https://pkg.cfssl.org/R1.2/cfssljson_linux-amd64
+chmod 755 /usr/local/bin/cfssl*
+
+##
+## EDIT kube-apiserver-csr.json to reflect local environment IP and hostnames
+## leave references to masterX, kubernetes, and 10.96 ip addresses.  
+## Under the section hosts, verify the hostnames master0, master1, and master2 remain, the many kubernetes aliases remain, and 10.96.0.1.
+## TODO: script this
+## 
+vi kube-apiserver-csr.json
+
+# ca for apiserver, kubelet, kubectl
+cfssl gencert -initca ca-csr.json | cfssljson -bare ca
+cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=kubernetes kube-apiserver-csr.json | cfssljson -bare kube-apiserver
+cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=kubernetes kube-apiserver-kubelet-client-csr.json | cfssljson -bare kube-apiserver-kubelet-client
+
+# ca for front proxy
+cfssl gencert -initca front-proxy-ca-csr.json | cfssljson -bare front-proxy-ca
+cfssl gencert -ca=front-proxy-ca.pem -ca-key=front-proxy-ca-key.pem -config=ca-config.json -profile=kubernetes front-proxy-client-csr.json | cfssljson -bare front-proxy-client
+
+# just a simple private/public key for service account
+openssl genrsa -out sa.key 2048
+openssl rsa -in sa.key -outform PEM -pubout -out sa.pub
+
+
+# rename so kubeadm below is happy. it expects the files to be named a certain way
+mv ca.pem ca.crt
+mv ca-key.pem ca.key
+mv kube-apiserver.pem apiserver.crt
+mv kube-apiserver-key.pem apiserver.key
+mv kube-apiserver.csr apiserver.csr
+mv kube-apiserver-kubelet-client.pem apiserver-kubelet-client.crt
+mv kube-apiserver-kubelet-client-key.pem apiserver-kubelet-client.key
+mv kube-apiserver-kubelet-client.csr apiserver-kubelet-client.csr
+mv front-proxy-ca-key.pem front-proxy-ca.key
+mv front-proxy-ca.pem front-proxy-ca.crt
+mv front-proxy-client-key.pem front-proxy-client.key
+mv front-proxy-client.pem front-proxy-client.crt
+
+cd ..
+
+# copy all the keys/certs to all 3 hosts from master0
+#
+scp pki-working/* foundry@master1:~/foundry-k8s-cluster/pki-working/
+scp pki-working/* foundry@master2:~/foundry-k8s-cluster/pki-working/
+
+
+
+#
+# ALL 3 HOSTS.  master0, master1, and master2
+#
+
+cd ~/foundry-k8s-cluster
+mkdir -p /etc/kubernetes/pki
+cp pki-working/* /etc/kubernetes/pki
+
+## Copy to each respective master host its one corresponding master etcd yaml file. 
+## master0 should get master0-etcd.yaml,  master1 gets master1-etcd.yaml etc. 
+## Do not give any one master multiples etcd yaml files!
+##
+## TODO: Script this
+# master0
+cp master0-etcd.yaml /etc/kubernetes/manifests/
+# master1
+cp master1-etcd.yaml /etc/kubernetes/manifests/
+# master2
+cp master2-etcd.yaml /etc/kubernetes/manifests/
+
+##
+## EDIT kubeadm-config.yaml to reflect local environment IP and hostnames
+## Under the section apiServerCertSANs verify the hostnames master0, master1, and master2 remain. 
+## Leave 127.0.0.1, replace the other IP addresses with the 3 for your environment.  
+## Add in your 3 master's IP addresses and pre-existing hostnames.
+## TODO script this
+##
+vi kubeadm-config.yaml
+
+## MANUAL KUBEADM METHOD 
+
+kubeadm alpha phase kubeconfig all --config kubeadm-config.yaml
+kubeadm alpha phase controlplane all --config kubeadm-config.yaml
+systemctl start kubelet
+
+
+### WAIT UNTIL DOCKER LOOKS good.  TBD what good means...
+# full docker container list with all columns
+docker ps
+
+# 2 second refresh
+#watch -n2 docker ps
+
+# list only the command and status columns
+docker ps --format '{{.Command}} {{.Status}}'
+
+# wait till all 3 hosts are stable with these 4 containers
+# each master should have its own individual etcd, master0, master1, and master2
+#
+#  "kube-apiserver --en…" Up About a minute
+#  "etcd --name=master0…" Up 13 minutes
+#  "kube-scheduler --le…" Up 13 minutes
+#  "kube-controller-man…" Up 14 minutes
+
+
+# docker logs <container-id> to investigate
+# docker inspect <container-id> to get the containers configuration state.  Look for LogPath to find the container's logging
+
+# Check /var/log/syslog as kubelet will log there its attempts and running the static containers in /etc/kubernetes/manifests
+
+
+
+#
+# SINGLE HOST. Just from master0
+#
+kubeadm config upload from-flags 
+kubeadm alpha phase bootstrap-token cluster-info /etc/kubernetes/admin.conf
+kubeadm alpha phase bootstrap-token node allow-post-csrs 
+kubeadm alpha phase bootstrap-token node allow-auto-approve
+kubeadm token create --config kubeadm-config.yaml
+kubeadm alpha phase addons kube-dns --config kubeadm-config.yaml
+kubeadm alpha phase addons kube-proxy --config kubeadm-config.yaml
+
+
+mkdir ~/.kube/
+cp /etc/kubernetes/admin.conf ~/.kube/config
+chown -R foundry:foundry /home/foundry
+
+# verify kubectl
+kubectl get pod --all-namespaces
+
+## scale up dns, apply networking, verify basics
+kubectl --namespace=kube-system scale deployment kube-dns --replicas=3
+
+
+# calico networking.
+#kubectl apply -f calico-3.1-k8setcd.yaml
+kubectl apply -f calico-2.6.8-k8setcd.yaml
+
+
+
+#
+# ALL 3 HOSTS.  master0, master1, and master2
+#
+
+### put kube-dns nameservers using resolvconf template method. 
+## Add the k8s resolver into the top of the hosts resolver search list
+## the actual resolver will be installed below.
+echo "nameserver 10.96.0.10" >> /etc/resolvconf/resolv.conf.d/head
+
+## add dns lookup opts 
+## Also lower the timeout and attempts so the system default resolver is attempted quicker
+## in the event the k8s resolver isnt responding
+echo "options ndots:5 timeout:1 attempts:1" >> /etc/resolvconf/resolv.conf.d/base
+
+# make the /etc/resolv.conf change take effect
+resolvconf -u
+
+
+# this was already done on master0, do on the other 2 masters so kubectl works on them if needed
+mkdir ~/.kube/
+cp /etc/kubernetes/admin.conf ~/.kube/config
+chown -R foundry:foundry /home/foundry
+
+# VERIFY
+# DO NOT PROCEED UNTIL ALL 3 HOSTS can resolve the dig command below
+# verify ALL PODS are running
+kubectl get pods --all-namespaces
+dig kubernetes.default.svc.cluster.local
+
+
+
+
+#
+# SINGLE HOST. Just from master0
+#
+## tools
+wget https://github.com/projectcalico/calicoctl/releases/download/v2.0.5/calicoctl
+kubectl cp kube-system/master0-etcd-$(hostname):/usr/local/bin/etcdctl .
+chmod 755 etcdctl calicoctl
+mv etcdctl calicoctl /usr/local/bin/
+
+# verify etcd health. output is good
+export ETCDCTL_API=2
+etcdctl --endpoints http://127.0.0.1:2379 ls /calico
+export ETCDCTL_API=3
+etcdctl --endpoints http://127.0.0.1:2379 get /registry --prefix -w fields
+
+# verify calico bgp peering
+ETCD_ENDPOINTS=http://127.0.0.1:2379 calicoctl node status
+
+
+
+##
+## install helm
+##
+wget https://storage.googleapis.com/kubernetes-helm/helm-v2.9.1-linux-amd64.tar.gz
+mkdir helm-unpack
+cd helm-unpack/
+tar -zxvf ../helm-v2.9.1-linux-amd64.tar.gz
+cp linux-amd64/helm /usr/local/bin/
+
+cd ..
+kubectl apply -f helm-role.yaml
+helm init --service-account tiller
+export HELM_HOME=/home/foundry/.helm
+helm repo add incubator https://kubernetes-charts-incubator.storage.googleapis.com/
+helm update
+
+
+##
+## install voltha and dependencies.  finally, why we are here
+##
+git clone https://github.com/donNewtonAlpha/helm-charts
+
+# foundry specific values, currently dockers images from the foundry docker-repo
+#
+
+cd helm-charts
+
+helm install --name etcd-cluster etcd
+helm dep build voltha
+helm install -n voltha voltha
+helm install --name onos-voltha -f configs/onos-voltha.yaml onos
+
+
+##
+## Verify whole cluster.  The pods should look very similar to below:
+##
+
+kubectl get pods --all-namespaces -o wide
+
+##  
+##  NAMESPACE     NAME                                                          READY     STATUS    RESTARTS   AGE       IP                NODE
+##  default       etcd-cluster-0                                                1/1       Running   0          1m        192.168.252.246   kube-07
+##  default       etcd-cluster-1                                                1/1       Running   0          3m        192.168.77.158    kube-08
+##  default       etcd-cluster-2                                                1/1       Running   0          2m        192.168.183.26    kube-06
+##  default       voltha-kafka-0                                                1/1       Running   2          4m        192.168.252.244   kube-07
+##  default       voltha-kafka-1                                                1/1       Running   0          2m        192.168.183.25    kube-06
+##  default       voltha-kafka-2                                                1/1       Running   0          1m        192.168.77.160    kube-08
+##  default       voltha-zookeeper-0                                            1/1       Running   0          4m        192.168.183.24    kube-06
+##  default       voltha-zookeeper-1                                            1/1       Running   0          3m        192.168.252.245   kube-07
+##  default       voltha-zookeeper-2                                            1/1       Running   0          3m        192.168.77.159    kube-08
+##  kube-system   calico-kube-controllers-5cc6fcf4d9-4tfss                      1/1       Running   1          20m       10.64.1.102       kube-08
+##  kube-system   calico-node-7xb6p                                             2/2       Running   2          20m       10.64.1.162       kube-06
+##  kube-system   calico-node-8gw7s                                             2/2       Running   2          20m       10.64.1.152       kube-07
+##  kube-system   calico-node-xsvgb                                             2/2       Running   2          20m       10.64.1.102       kube-08
+##  kube-system   kube-apiserver-kube-06                                        1/1       Running   21         41m       10.64.1.162       kube-06
+##  kube-system   kube-apiserver-kube-07                                        1/1       Running   21         1h        10.64.1.152       kube-07
+##  kube-system   kube-apiserver-kube-08                                        1/1       Running   21         1h        10.64.1.102       kube-08
+##  kube-system   kube-controller-manager-kube-06                               1/1       Running   5          41m       10.64.1.162       kube-06
+##  kube-system   kube-controller-manager-kube-07                               1/1       Running   5          55m       10.64.1.152       kube-07
+##  kube-system   kube-controller-manager-kube-08                               1/1       Running   6          40m       10.64.1.102       kube-08
+##  kube-system   kube-dns-86f4d74b45-hk5ps                                     3/3       Running   3          21m       192.168.77.139    kube-08
+##  kube-system   kube-dns-86f4d74b45-p6rqb                                     3/3       Running   3          20m       192.168.252.220   kube-07
+##  kube-system   kube-dns-86f4d74b45-pqv8j                                     3/3       Running   3          20m       192.168.183.17    kube-06
+##  kube-system   kube-proxy-7bxr6                                              1/1       Running   1          21m       10.64.1.102       kube-08
+##  kube-system   kube-proxy-9xr54                                              1/1       Running   1          21m       10.64.1.152       kube-07
+##  kube-system   kube-proxy-rstbh                                              1/1       Running   1          21m       10.64.1.162       kube-06
+##  kube-system   kube-scheduler-kube-06                                        1/1       Running   6          41m       10.64.1.162       kube-06
+##  kube-system   kube-scheduler-kube-07                                        1/1       Running   6          41m       10.64.1.152       kube-07
+##  kube-system   kube-scheduler-kube-08                                        1/1       Running   7          56m       10.64.1.102       kube-08
+##  kube-system   master0-etcd-kube-06                                          1/1       Running   9          41m       10.64.1.162       kube-06
+##  kube-system   master1-etcd-kube-07                                          1/1       Running   8          55m       10.64.1.152       kube-07
+##  kube-system   master2-etcd-kube-08                                          1/1       Running   9          41m       10.64.1.102       kube-08
+##  kube-system   tiller-deploy-5c688d5f9b-5mqrt                                1/1       Running   1          15m       192.168.252.217   kube-07
+##  voltha        dashd-57cdb689cc-b8l9k                                        1/1       Running   3          4m        192.168.77.156    kube-08
+##  voltha        default-http-backend-5c6d95c48-c7zkt                          1/1       Running   0          4m        192.168.183.22    kube-06
+##  voltha        grafana-5cbd57c584-cm2ll                                      1/1       Running   0          4m        192.168.183.20    kube-06
+##  voltha        netconf-6b9f65df49-kc4ck                                      1/1       Running   0          4m        192.168.252.240   kube-07
+##  voltha        nginx-ingress-controller-566c84c9fd-fl8wm                     1/1       Running   0          4m        192.168.252.243   kube-07
+##  voltha        ofagent-5b9d98975b-wnlzt                                      1/1       Running   0          4m        192.168.183.21    kube-06
+##  voltha        onos-voltha-6676c46bbc-z6srd                                  1/1       Running   0          3m        192.168.77.157    kube-08
+##  voltha        shovel-688ff789cc-7zltw                                       1/1       Running   2          4m        192.168.183.23    kube-06
+##  voltha        vcli-67587c7988-bch42                                         1/1       Running   0          4m        192.168.77.154    kube-08
+##  voltha        vcore-7c6b898789-zvfxn                                        1/1       Running   0          4m        192.168.252.241   kube-07
+##  voltha        voltha-65cc8fd59f-k66z5                                       1/1       Running   1          4m        192.168.77.155    kube-08
+
+
+
+# TODO:  properly inject onos config for olt, aaa, and sadis
+# for now just run curl shell script to inject needed config
+cd ..
+./netcfg-update.sh
+
+
+# verify cluster operation
+#
+# voltha/admin
+# ssh -p 5022 voltha@vcli.voltha.svc.cluster.local
+#   devices 
+#   table should say empty
+#
+# karaf/karaf
+# ssh -p 8101 karaf@onos-voltha-ssh.voltha.svc.cluster.local
+#   apps -s -a
+#   should list the installed apps
+
+
+
+

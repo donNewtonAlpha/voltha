@@ -47,6 +47,8 @@ from voltha.protos.bbf_fiber_gemport_body_pb2 import GemportsConfigData
 from common.frameio.frameio import hexify
 from voltha.extensions.omci.omci import *
 
+from voltha.registry import registry
+
 _ = third_party
 log = structlog.get_logger()
 
@@ -320,6 +322,11 @@ class BroadcomOnuHandler(object):
         self.event_messages = DeferredQueue()
         self.proxy_address = None
         self.tx_id = 0
+        #Flag to know if ONU has been activated before and therefore tcont and gemports have to be replayed on reboot
+
+        # Proxy for api calls
+        self.core = registry('core')
+        self.proxy = self.core.get_proxy('/')
 
         # Need to query ONU for number of supported uni ports
         # For now, temporarily set number of ports to 1 - port #2
@@ -342,12 +349,56 @@ class BroadcomOnuHandler(object):
                 yield self.message_exchange()
 
                 device = self.adapter_agent.get_device(self.device_id)
+                self.log.debug('onu-event-activation-successful', old_state=device.oper_status,
+                              new_state=OperStatus.ACTIVE, event_msg=event_msg)
                 device.connect_status = ConnectStatus.REACHABLE
                 device.oper_status = OperStatus.ACTIVE
                 self.adapter_agent.update_device(device)
+                #If ONU was previously provisionned repush the tconts and gemports to it
+                try:
+                    # Reactivation case : replay Tcont and gemPort
+                    self.log.info('checking-if-tconts-and-gemports-were-previously-provisioned',
+                                  serial_number=device.serial_number)
 
+                    # Get all v_ont_anis
+                    v_ont_anis = self.proxy.get('/v_ont_anis')
+                    # Get all tconts
+                    tconts = self.proxy.get('/tconts')
+                    # Get all gemports
+                    gemports = self.proxy.get('/gemports')
+                    reactivationRequired = False
+
+                    for v_ont_ani in v_ont_anis:
+                        # Find matching v_ont_ani
+                        if v_ont_ani.data.expected_serial_number == device.serial_number:
+                            # Get tcont(s) for device
+
+                            for tcont in tconts:
+                                if tcont.interface_reference == v_ont_ani.name:
+                                    reactivationRequired = True
+                                    self.log.debug('reapplying-existing-tcont', tcont=tcont,
+                                                   serial_number=device.serial_number)
+                                    self.create_tcont(tcont, traffic_descriptor_data=None)
+
+                                    # Get gemport(s) for device
+                                    for gemport in gemports:
+                                        if gemport.tcont_ref == tcont.name:
+                                            self.log.debug('reapplying-existing-gemport', gemport=gemport,
+                                                          tcont=tcont, serial_number=device.serial_number)
+
+                                            self.create_gemport(gemport)
+                    if reactivationRequired:
+                        self.log.info('reactivating-onu-tconts-and-gemports-reapplied',
+                                  serial_number=device.serial_number)
+                        self.reenable()
+
+                except Exception as e:
+                    log.error('exception-getting-data-from-storage-when-checking-for-reactivation', error=e)
+                    
             else:
                 device = self.adapter_agent.get_device(self.device_id)
+                self.log.debug('onu-event-activation-NOT-successful', old_state=device.oper_status,
+                              new_state=OperStatus.FAILED, event_msg=event_msg)
                 self.disable_ports(device)
                 device.connect_status = ConnectStatus.UNREACHABLE
                 device.oper_status = OperStatus.FAILED
@@ -355,11 +406,15 @@ class BroadcomOnuHandler(object):
 
         elif event_msg['event'] == 'deactivation-completed':
             device = self.adapter_agent.get_device(self.device_id)
+            self.log.debug('onu-event-deactivation-completed', old_state=device.oper_status,
+                          new_state=OperStatus.DISCOVERED, event_msg=event_msg)
             device.oper_status = OperStatus.DISCOVERED
             self.adapter_agent.update_device(device)
 
         elif event_msg['event'] == 'deactivate-onu':
             device = self.adapter_agent.get_device(self.device_id)
+            self.log.debug('onu-event-deactivate-onu', old_state=device.oper_status,
+                          new_state=OperStatus.DISCOVERED, event_msg=event_msg)
             self.disable_ports(device)
             device.connect_status = ConnectStatus.UNREACHABLE
             device.oper_status = OperStatus.DISCOVERED
@@ -370,15 +425,27 @@ class BroadcomOnuHandler(object):
             device.connect_status = ConnectStatus.UNREACHABLE
             self.adapter_agent.update_device(device)
 
+        elif event_msg['event'] == 'reactivate-onu':
+            device = self.adapter_agent.get_device(self.device_id)
+            #Move this ONU back to discovered state for it to get back on the activation logic
+            self.log.debug('onu-event-reactivate-onu', old_state=device.oper_status,
+                          new_state=OperStatus.DISCOVERED, event_msg=event_msg)
+            device.oper_status = OperStatus.DISCOVERED
+            self.adapter_agent.update_device(device)
+
         elif event_msg['event'] == 'ranging-completed':
 
             if event_msg['event_data']['ranging_successful'] == True:
                 device = self.adapter_agent.get_device(self.device_id)
+                self.log.debug('onu-event-ranging-completed-ranging-successful', old_state=device.oper_status,
+                              new_state=OperStatus.ACTIVATING)
                 device.oper_status = OperStatus.ACTIVATING
                 self.adapter_agent.update_device(device)
 
             else:
                 device = self.adapter_agent.get_device(self.device_id)
+                self.log.debug('onu-event-ranging-completed-ranging-NOT-successful', old_state=device.oper_status,
+                              new_state=OperStatus.FAILED, event_msg=event_msg)
                 device.oper_status = OperStatus.FAILED
                 self.adapter_agent.update_device(device)
 
@@ -397,6 +464,7 @@ class BroadcomOnuHandler(object):
         elif event_msg['event'] == 'create-tcont':
             tcont = TcontsConfigData()
             tcont.alloc_id = event_msg['event_data']['alloc_id']
+            #Store Tcont for reboot
             self.create_tcont(tcont, traffic_descriptor_data=None)
 
         elif event_msg['event'] == 'create-venet':
@@ -407,6 +475,7 @@ class BroadcomOnuHandler(object):
         elif event_msg['event'] == 'create-gemport':
             gem_port = GemportsConfigData()
             gem_port.gemport_id = event_msg['event_data']['gemport_id']
+            #Store gem port for reboot
             self.create_gemport(gem_port)
 
         # Handle next event
@@ -489,8 +558,24 @@ class BroadcomOnuHandler(object):
 
     def delete(self, device):
         self.log.info('delete-onu')
-        # The device is already deleted in delete_v_ont_ani(). No more
-        # handling needed here
+
+        # construct message
+        # MIB Reset - OntData - 0
+        if device is None or device.connect_status != ConnectStatus.REACHABLE:
+            self.log.error('device-unreachable')
+            returnValue(None)
+
+        self.send_mib_reset()
+        yield self.wait_for_response()
+        self.proxy_address = device.proxy_address
+        self.adapter_agent.unregister_for_proxied_messages(device.proxy_address)
+
+        ports = self.adapter_agent.get_ports(self.device_id, Port.PON_ONU)
+        if ports is not None:
+            for port in ports:
+                if port.label == 'PON port':
+                    self.adapter_agent.delete_port(self.device_id, port)
+                    break
 
     @inlineCallbacks
     def update_flow_table(self, device, flows):
@@ -1662,6 +1747,7 @@ class BroadcomOnuHandler(object):
             self.send_set_8021p_mapper_service_profile(0x8001,
                                                        gem_port.gemport_id)
             yield self.wait_for_response()
+            #Once a gemport has been provisionned on the ONU it is considered fully activated
 
 
     @inlineCallbacks
@@ -1733,6 +1819,7 @@ class BroadcomOnuHandler(object):
             self.log.info('sending-admin-state-unlock-towards-device', device=device)
             self.send_set_admin_state(0x0000, ADMIN_STATE_UNLOCK)
             yield self.wait_for_response()
+
             self.enable_ports(device)
             device.oper_status = OperStatus.ACTIVE
             device.connect_status = ConnectStatus.REACHABLE

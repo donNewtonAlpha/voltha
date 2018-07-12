@@ -1,0 +1,3 @@
+interface "eth0" {
+    prepend domain-name-servers 10.96.0.10;
+}

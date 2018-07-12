@@ -1,0 +1,17 @@
+kubeadm alpha phase certificates all
+kubeadm alpha phase kubeconfig all
+kubeadm alpha phase etcd local
+kubeadm alpha phase controlplane all
+systemctl start kubelet
+
+# wait
+
+kubeadm config upload from-flags
+kubeadm alpha phase mark-master $(kubectl get no --no-headers | awk ‘{print $1}’)
+kubeadm alpha phase bootstrap-token cluster-info /etc/kubernetes/admin.conf
+kubeadm alpha phase bootstrap-token node allow-post-csrs
+kubeadm alpha phase bootstrap-token node allow-auto-approve
+kubeadm token create
+kubeadm alpha phase addons kube-dns
+kubeadm alpha phase addons kube-proxy
+

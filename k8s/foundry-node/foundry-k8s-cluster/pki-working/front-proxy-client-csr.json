@@ -1,0 +1,16 @@
+{
+  "CN": "front-proxy-client",
+  "key": {
+    "algo": "rsa",
+    "size": 2048
+  },
+  "names": [
+    {
+      "C": "US",
+      "L": "Atlanta",
+      "O": "Kubernetes",
+      "OU": "AT&T VOLTHA",
+      "ST": "Georgia"
+    }
+  ]
+}

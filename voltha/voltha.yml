@@ -17,7 +17,11 @@ logging:
     formatters:
       brief:
         format: '%(message)s'
+#  Added line number information  20180530
       default:
+        format: '%(asctime)s.%(msecs)03d %(levelname)-8s %(threadName)s %(module)s.%(funcName)s - [line %(lineno)s] - %(message)s'
+        datefmt: '%Y%m%dT%H%M%S'
+      default_orig:
         format: '%(asctime)s.%(msecs)03d %(levelname)-8s %(threadName)s %(module)s.%(funcName)s %(message)s'
         datefmt: '%Y%m%dT%H%M%S'
 
@@ -61,7 +65,7 @@ coordinator:
     workload_key: 'work'
     membership_watch_relatch_delay: 0.1
     membership_maintenance_loop_delay: 5
-    tracking_loop_delay: 1
+    tracking_loop_delay: 10
     session_time_to_live: 60
     session_renewal_loop_delay: 10
     session_renewal_timeout: 10
