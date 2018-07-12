@@ -28,17 +28,11 @@
         <dhcpl2relay.version>1.4.0</dhcpl2relay.version>
         <igmpproxy.version>1.2.0</igmpproxy.version>
         <mcast.version>1.4.0</mcast.version>
-        <olt.version>1.4.1</olt.version>
+        <olt.version>2.0.0-SNAPSHOT</olt.version>
         <sadis.version>2.1.0</sadis.version>
-<!--
-        <aaa.version>1.6.0-SNAPSHOT</aaa.version>
-        <config.version>1.4.0-SNAPSHOT</config.version>
-        <dhcpl2relay.version>1.4.0-SNAPSHOT</dhcpl2relay.version>
-        <igmpproxy.version>1.2.0-SNAPSHOT</igmpproxy.version>
-        <mcast.version>1.4.0-SNAPSHOT</mcast.version>
-        <olt.version>1.4.0-SNAPSHOT</olt.version>
-        <sadis.version>2.1.0-SNAPSHOT</sadis.version>
--->
+        <aaa.version>1.7.0-SNAPSHOT</aaa.version>
+
+
     </properties>
 
     <build>
@@ -56,14 +50,7 @@
                             <type>oar</type>
                             <overWrite>true</overWrite>
                         </artifactItem>
-<!--
-                        <artifactItem>
-                            <groupId>org.opencord</groupId>
-                            <artifactId>mcast</artifactId>
-                            <version>${mcast.version}</version>
-                            <type>oar</type>
-                            <overWrite>true</overWrite>
-                        </artifactItem>
+
                         <artifactItem>
                             <groupId>org.opencord</groupId>
                             <artifactId>olt-app</artifactId>
@@ -71,7 +58,7 @@
                             <type>oar</type>
                             <overWrite>true</overWrite>
                         </artifactItem>
--->
+
                         <artifactItem>
                             <groupId>org.opencord</groupId>
                             <artifactId>sadis-app</artifactId>
@@ -79,7 +66,7 @@
                             <type>oar</type>
                             <overWrite>true</overWrite>
                         </artifactItem>
-<!--
+
                         <artifactItem>
                             <groupId>org.opencord</groupId>
                             <artifactId>aaa</artifactId>
@@ -87,14 +74,7 @@
                             <type>oar</type>
                             <overWrite>true</overWrite>
                         </artifactItem>
-                        <artifactItem>
-                            <groupId>org.opencord</groupId>
-                            <artifactId>onos-app-igmpproxy</artifactId>
-                            <version>${igmpproxy.version}</version>
-                            <type>oar</type>
-                            <overWrite>true</overWrite>
-                        </artifactItem>
--->
+
                         <artifactItem>
                             <groupId>org.opencord</groupId>
                             <artifactId>dhcpl2relay</artifactId>
