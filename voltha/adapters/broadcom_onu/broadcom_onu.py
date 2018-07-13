@@ -572,25 +572,25 @@ class BroadcomOnuHandler(object):
 
         # self.send_mib_reset()
         # yield self.wait_for_response()
-        #self.proxy_address = device.proxy_address
-        #self.adapter_agent.unregister_for_proxied_messages(device.proxy_address)
+        self.proxy_address = device.proxy_address
+        self.adapter_agent.unregister_for_proxied_messages(device.proxy_address)
 
         # self.log.info('get-ports')
-        # ports = self.adapter_agent.get_ports(self.device_id, Port.PON_ONU)
-        # self.log.info('delete-ports')
-        # if ports is not None:
-        #     for port in ports:
-        #         if port.label == 'PON port':
-        #             self.log.info('delete-port',port=port)
-        #             self.adapter_agent.delete_port(self.device_id, port)
-        #             break
+        ports = self.adapter_agent.get_ports(self.device_id, Port.PON_ONU)
+        self.log.info('delete-ports')
+        if ports is not None:
+            for port in ports:
+                if port.label == 'PON port':
+                    self.log.info('delete-port',port=port)
+                    self.adapter_agent.delete_port(self.device_id, port)
+                    break
 
-        self.log.info('parent-adapter-delete-onu')
-        self.log.info('onu-device',onu_device=device)
+
         parent_device = self.adapter_agent.get_device(device.parent_id)
-        self.log.info('parent-device', parent_device=parent_device)
         parent_adapter = registry('adapter_loader').get_agent(parent_device.adapter).adapter
-        self.log.info('parent-adapter', parent_adapter=parent_adapter)
+        self.log.info('parent-adapter-delete-onu', onu_device=device,
+                      parent_device=parent_device,
+                      parent_adapter=parent_adapter)
         try:
             parent_adapter.delete_child_device(parent_device.id, device)
         except AttributeError:
