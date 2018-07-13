@@ -995,7 +995,5 @@ class OpenoltDevice(object):
         onu = openolt_pb2.Onu(intf_id=child_device.proxy_address.channel_id,
                               onu_id=child_device.proxy_address.onu_id,
                               serial_number=serial_number)
-        self.log.debug('onu-protobuf', onu=onu)
         self.stub.DeactivateOnu(onu)
-
         #self.adapter_agent.delete_child_device(self.device_id, child_device.device_id)
