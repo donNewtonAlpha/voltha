@@ -300,6 +300,11 @@ class OpenoltAdapter(object):
         log.info('remove-mcast-distribution-set', data=data)
         raise NotImplementedError()
 
+    def disable_child_device(self, parent_device_id, child_device):
+        log.info('disable-child_device', parent_device_id=parent_device_id, child_device=child_device)
+        handler = self.devices[parent_device_id]
+        handler.disable_child_device(child_device)
+
     def delete_child_device(self, parent_device_id, child_device):
         log.info('delete-child_device', parent_device_id=parent_device_id, child_device=child_device)
         handler = self.devices[parent_device_id]

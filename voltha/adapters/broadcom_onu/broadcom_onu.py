@@ -564,17 +564,6 @@ class BroadcomOnuHandler(object):
     def delete(self, device):
         self.log.info('delete-onu', device=device)
 
-        # construct message
-        # MIB Reset - OntData - 0
-        # if device is None or device.connect_status != ConnectStatus.REACHABLE:
-        #    self.log.error('device-unreachable')
-        #    returnValue(None)
-
-        # self.send_mib_reset()
-        # yield self.wait_for_response()
-        # self.proxy_address = device.proxy_address
-        # self.adapter_agent.unregister_for_proxied_messages(device.proxy_address)
-
         # self.log.info('get-ports')
         # ports = self.adapter_agent.get_ports(self.device_id, Port.PON_ONU)
         # self.log.info('delete-ports')
@@ -1829,6 +1818,16 @@ class BroadcomOnuHandler(object):
             device.oper_status = OperStatus.UNKNOWN
             device.connect_status = ConnectStatus.UNREACHABLE
             self.adapter_agent.update_device(device)
+            # Disable in parent device (OLT)
+            parent_device = self.adapter_agent.get_device(device.parent_id)
+            parent_adapter = registry('adapter_loader').get_agent(parent_device.adapter).adapter
+            self.log.info('parent-adapter-disable-onu', onu_device=device,
+                          parent_device=parent_device,
+                          parent_adapter=parent_adapter)
+            try:
+                parent_adapter.disable_child_device(parent_device.id, device)
+            except AttributeError:
+                self.log.debug('parent-device-disable-child-not-implemented')
         except Exception as e:
             log.exception('exception-in-onu-disable', exception=e)
 
