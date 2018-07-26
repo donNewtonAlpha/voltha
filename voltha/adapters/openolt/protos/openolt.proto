@@ -25,6 +25,20 @@ service Openolt {
         };
     }
 
+    rpc DeactivateOnu(Onu) returns (Empty) {
+        option (google.api.http) = {
+          post: "/v1/DisableOnu"
+          body: "*"
+        };
+    }
+
+    rpc DeleteOnu(Onu) returns (Empty) {
+        option (google.api.http) = {
+          post: "/v1/DeleteOnu"
+          body: "*"
+        };
+    }
+
     rpc OmciMsgOut(OmciMsg) returns (Empty) {
         option (google.api.http) = {
           post: "/v1/OmciMsgOut"
@@ -161,6 +175,7 @@ message Onu {
     fixed32 intf_id = 1;
     fixed32 onu_id = 2;
     SerialNumber serial_number = 3;
+    fixed32 pir = 4;   // peak information rate assigned to onu
 }
 
 message OmciMsg {
