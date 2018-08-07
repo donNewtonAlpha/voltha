@@ -101,5 +101,6 @@ if __name__ == "__main__":
             filter_list.append('WARNING')
         if args.error:
             filter_list.append('ERROR')
+            filter_list.append('Error')
 
         log_filtering(args.inputFile, filter_list, args.outputFile, not args.noPrint)
