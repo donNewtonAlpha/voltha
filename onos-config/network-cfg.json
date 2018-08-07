@@ -18,15 +18,6 @@
         "vlan" : "11"
       }
     },
-    "of:000000000af20b15" : {
-      "basic" : {
-        "driver" : "pmc-olt"
-      },
-      "accessDevice" : {
-        "uplink" : "128",
-        "vlan" : "10"
-      }
-    },
     "of:000000000a4001cf" : {
       "basic" : {
         "driver" : "pmc-olt"
@@ -35,13 +26,21 @@
         "uplink" : "128",
         "vlan" : "12"
       }
+    },
+    "of:000000000af20b15" : {
+      "basic" : {
+        "driver" : "pmc-olt"
+      },
+      "accessDevice" : {
+        "uplink" : "128",
+        "vlan" : "10"
+      }
     }
   },
   "apps" : {
     "org.opencord.dhcpl2relay" : {
       "dhcpl2relay" : {
-        "dhcpServerConnectPoints" : [ "of:000000000a4001cd/128",
-          "of:000000000a4001ce/128", "of:000000000a4001cf/128" ]
+        "useOltUplinkForServerPktInOut" : true
       }
     },
     "org.opencord.aaa" : {
@@ -64,35 +63,43 @@
           }
         },
         "entries" : [ {
-          "id" : "ALPHe30cadd4",
-          "cTag" : 20,
-          "sTag" : 10,
-          "nasPortId" : "PON 1/1/3/1:1.1.1",
-          "circuitId" : "PON 1/1/3/1:1.1.1-CID",
-          "remoteId" : "ATLEDGEVOLT1-RID"
-        },{
-          "id" : "ALCLfa5b91ef",
-          "cTag" : 20,
-          "sTag" : 10,
-          "nasPortId" : "PON 1/1/3/1:1.1.1",
-          "circuitId" : "PON 1/1/3/1:1.1.1-CID",
-          "remoteId" : "ATLEDGEVOLT1-RID"
-        }, {
-          "id" : "10.64.1.205:9191",
+         "id" : "10.64.1.205:9191",
+          "uplinkPort" : 128,
           "hardwareIdentifier" : "a8:2b:b5:36:76:9e",
           "ipAddress" : "10.64.1.205",
           "nasId" : "ATLEDGEVOLT1"
-        },{
+        }, {
           "id" : "10.64.1.206:9191",
+          "uplinkPort" : 128,
           "hardwareIdentifier" : "a8:2b:b5:36:78:ae",
           "ipAddress" : "10.64.1.206",
           "nasId" : "ATLEDGEVOLT1"
         }, {
-          "id" : "ALPHe30cae6a",
+          "id" : "10.64.1.207:9191",
+          "uplinkPort" : 128,
+          "hardwareIdentifier" : "3c:2c:99:f7:c6:82",
+          "ipAddress" : "10.64.1.207",
+          "nasId" : "ATLEDGEVOLT1"
+        }, {
+          "id" : "ALPHE30cadd4",
+          "cTag" : 20,
+          "sTag" : 10,
+          "nasPortId" : "PON 1/1/3/1:1.1.1",
+          "circuitId" : "PON 1/1/3/1:1.1.1-CID",
+          "remoteId" : "ATLEDGEVOLT1-RID"
+        }, {
+          "id" : "ALPHe3d1cf57",
           "cTag" : 20,
           "sTag" : 11,
           "nasPortId" : "PON 1/1/3/1:2.1.1",
           "circuitId" : "PON 1/1/3/1:2.1.1-CID",
+          "remoteId" : "ATLEDGEVOLT1-RID"
+        }, {
+          "id" : "ALPHe3d1ce3f",
+          "cTag" : 20,
+          "sTag" : 12,
+          "nasPortId" : "PON 1/1/3/1:3.1.1",
+          "circuitId" : "PON 1/1/3/1:3.1.1-CID",
           "remoteId" : "ATLEDGEVOLT1-RID"
         }]
       }
