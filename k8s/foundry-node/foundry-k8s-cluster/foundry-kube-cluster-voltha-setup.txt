@@ -159,18 +159,24 @@ cp master1-etcd.yaml /etc/kubernetes/manifests/
 cp master2-etcd.yaml /etc/kubernetes/manifests/
 
 ##
-## EDIT kubeadm-config.yaml to reflect local environment IP and hostnames
+## EDIT kubeadm-config-v2.yaml to reflect local environment IP and hostnames
 ## Under the section apiServerCertSANs verify the hostnames master0, master1, and master2 remain. 
 ## Leave 127.0.0.1, replace the other IP addresses with the 3 for your environment.  
 ## Add in your 3 master's IP addresses and pre-existing hostnames.
 ## TODO script this
 ##
-vi kubeadm-config.yaml
+vi kubeadm-config-v2.yaml
+
+scp kubeadm-config-v2.yaml foundry@master1:~/foundry-k8s-cluster/
+scp kubeadm-config-v2.yaml foundry@master2:~/foundry-k8s-cluster/
+
 
 ## MANUAL KUBEADM METHOD 
 
-kubeadm alpha phase kubeconfig all --config kubeadm-config.yaml
-kubeadm alpha phase controlplane all --config kubeadm-config.yaml
+kubeadm alpha phase kubelet config write-to-disk --config kubeadm-config-v2.yaml
+kubeadm alpha phase kubelet write-env-file --config kubeadm-config-v2.yaml
+kubeadm alpha phase kubeconfig all --config kubeadm-config-v2.yaml
+kubeadm alpha phase controlplane all --config kubeadm-config-v2.yaml
 systemctl start kubelet
 
 
@@ -207,9 +213,9 @@ kubeadm config upload from-flags
 kubeadm alpha phase bootstrap-token cluster-info /etc/kubernetes/admin.conf
 kubeadm alpha phase bootstrap-token node allow-post-csrs 
 kubeadm alpha phase bootstrap-token node allow-auto-approve
-kubeadm token create --config kubeadm-config.yaml
-kubeadm alpha phase addons kube-dns --config kubeadm-config.yaml
-kubeadm alpha phase addons kube-proxy --config kubeadm-config.yaml
+kubeadm token create --config kubeadm-config-v2.yaml
+kubeadm alpha phase addons coredns --config kubeadm-config-v2.yaml
+kubeadm alpha phase addons kube-proxy --config kubeadm-config-v2.yaml
 
 
 mkdir ~/.kube/
@@ -217,35 +223,21 @@ cp /etc/kubernetes/admin.conf ~/.kube/config
 chown -R foundry:foundry /home/foundry
 
 # verify kubectl
-kubectl get pod --all-namespaces
+kubectl get pod --all-namespaces -o wide
 
-## scale up dns, apply networking, verify basics
-kubectl --namespace=kube-system scale deployment kube-dns --replicas=3
-
+# scale up dns add node balancing affinity
+#kubectl --namespace=kube-system scale deployment coredns --replicas=3
+kubectl apply -f coredns-deployment-updated.yaml
 
 # calico networking.
-#kubectl apply -f calico-3.1-k8setcd.yaml
-kubectl apply -f calico-2.6.8-k8setcd.yaml
+kubectl apply -f calico-rbac-kdd.yaml
+kubectl apply -f calico-3.1.3-k8setcd.yaml
 
 
 
 #
 # ALL 3 HOSTS.  master0, master1, and master2
 #
-
-### put kube-dns nameservers using resolvconf template method. 
-## Add the k8s resolver into the top of the hosts resolver search list
-## the actual resolver will be installed below.
-echo "nameserver 10.96.0.10" >> /etc/resolvconf/resolv.conf.d/head
-
-## add dns lookup opts 
-## Also lower the timeout and attempts so the system default resolver is attempted quicker
-## in the event the k8s resolver isnt responding
-echo "options ndots:5 timeout:1 attempts:1" >> /etc/resolvconf/resolv.conf.d/base
-
-# make the /etc/resolv.conf change take effect
-resolvconf -u
-
 
 # this was already done on master0, do on the other 2 masters so kubectl works on them if needed
 mkdir ~/.kube/
@@ -256,7 +248,8 @@ chown -R foundry:foundry /home/foundry
 # DO NOT PROCEED UNTIL ALL 3 HOSTS can resolve the dig command below
 # verify ALL PODS are running
 kubectl get pods --all-namespaces
-dig kubernetes.default.svc.cluster.local
+dig kubernetes.default.svc.cluster.local @10.96.0.10
+kubectl run -i --tty network-utils --image=amouat/network-utils --restart=Never --rm=true -- dig kubernetes.default.svc.cluster.local
 
 
 
@@ -271,10 +264,9 @@ chmod 755 etcdctl calicoctl
 mv etcdctl calicoctl /usr/local/bin/
 
 # verify etcd health. output is good
-export ETCDCTL_API=2
-etcdctl --endpoints http://127.0.0.1:2379 ls /calico
 export ETCDCTL_API=3
 etcdctl --endpoints http://127.0.0.1:2379 get /registry --prefix -w fields
+etcdctl --endpoints http://127.0.0.1:2379 get /calico --prefix -w fields
 
 # verify calico bgp peering
 ETCD_ENDPOINTS=http://127.0.0.1:2379 calicoctl node status
