@@ -41,7 +41,8 @@ class AdtranOltAdapter(object):
         DeviceType(
             id=name,
             adapter=name,
-            accepts_bulk_flow_update=True
+            accepts_bulk_flow_update=True,
+            accepts_add_remove_flow_updates=False       # TODO: Support flow-mods
         )
     ]
 
@@ -50,8 +51,8 @@ class AdtranOltAdapter(object):
         self.config = config
         self.descriptor = Adapter(
             id=self.name,
-            vendor='Adtran, Inc.',
-            version='0.16',
+            vendor='Adtran Inc.',
+            version='0.19',
             config=AdapterConfig(log_level=LogLevel.INFO)
         )
         log.debug('adtran_olt.__init__', adapter_agent=adapter_agent)
@@ -138,8 +139,7 @@ class AdtranOltAdapter(object):
         }
         self.devices_handlers[device.id] = AdtranOltHandler(**kwargs)
         d = defer.Deferred()
-        reactor.callLater(0, self.devices_handlers[device.id].activate,
-                          device, done_deferred=d)
+        reactor.callLater(0, self.devices_handlers[device.id].activate, d, False)
         return d
 
     def reconcile_device(self, device):
@@ -160,8 +160,7 @@ class AdtranOltAdapter(object):
         }
         self.devices_handlers[device.id] = AdtranOltHandler(**kwargs)
         d = defer.Deferred()
-        reactor.callLater(0, self.devices_handlers[device.id].activate, device,
-                          done_deferred=d, reconciling=True)
+        reactor.callLater(0, self.devices_handlers[device.id].activate, d, True)
         return d
 
     def abandon_device(self, device):

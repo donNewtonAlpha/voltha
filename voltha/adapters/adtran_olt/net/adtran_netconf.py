@@ -99,7 +99,7 @@ class AdtranNetconfClient(object):
 
         except SSHError as e:
             # Log and rethrow exception so any errBack is called
-            log.exception('SSHError-during-connect', e=e)
+            log.warn('SSHError-during-connect', e=e)
             raise e
 
         except Exception as e:
@@ -302,14 +302,14 @@ class AdtranNetconfClient(object):
                                                     config, default_operation,
                                                     test_option, error_option)
         except Exception as e:
-            log.exception('edit_config', e=e)
+            log.exception('edit_config', e=e, config=config, target=target)
             raise
 
         returnValue(rpc_reply)
 
     def _do_edit_config(self, target, config, default_operation, test_option, error_option):
         """
-        Lock the configuration system
+        Perform actual edit-config operation
         """
         try:
             log.debug('edit-config', target=target, config=config)
@@ -326,7 +326,7 @@ class AdtranNetconfClient(object):
             # To check status, use response.ok  (boolean)
 
         except RPCError as e:
-            log.exception('do_edit_config', e=e)
+            log.exception('do_edit_config', e=e, config=config, target=target)
             raise
 
         return response

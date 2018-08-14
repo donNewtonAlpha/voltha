@@ -45,6 +45,7 @@ from voltha.adapters.openolt.openolt_flow_mgr import OpenOltFlowMgr, \
         DEFAULT_MGMT_VLAN
 from voltha.adapters.openolt.openolt_alarms import OpenOltAlarmMgr
 from voltha.adapters.openolt.openolt_bw import OpenOltBW
+from voltha.extensions.alarms.onu.onu_discovery_alarm import OnuDiscoveryAlarm
 
 
 class OpenoltDevice(object):
@@ -352,6 +353,13 @@ class OpenoltDevice(object):
         self.log.debug("onu discovery indication", intf_id=intf_id,
                        serial_number=serial_number_str)
 
+        # Post ONU Discover alarm  20180809_0805
+        try:
+            OnuDiscoveryAlarm(self.alarm_mgr.alarms, pon_id=intf_id, serial_number=serial_number_str).raise_alarm()
+        except Exception as disc_alarm_error:
+            self.log.exception("onu-discovery-alarm-error", errmsg=disc_alarm_error.message)
+            # continue for now.
+
         pir = self.bw_mgr.pir(serial_number_str)
         self.log.debug("peak information rate", serial_number=serial_number,
                        pir=pir)
@@ -490,6 +498,13 @@ class OpenoltDevice(object):
 
         self.log.debug('admin-state-dealt-with')
 
+        onu_adapter_agent = \
+            registry('adapter_loader').get_agent(onu_device.adapter)
+        if onu_adapter_agent is None:
+            self.log.error('onu_adapter_agent-could-not-be-retrieved',
+                           onu_device=onu_device)
+            return
+
         # Operating state
         if onu_indication.oper_state == 'down':
             # Move to discovered state
@@ -502,6 +517,10 @@ class OpenoltDevice(object):
             self.onu_ports_down(onu_device, uni_no, uni_name,
                                 OperStatus.DISCOVERED)
 
+            if onu_device.adapter == 'brcm_openomci_onu':
+                self.log.debug('using-brcm_openomci_onu')
+                onu_adapter_agent.update_interface(onu_device, onu_indication)
+
         elif onu_indication.oper_state == 'up':
 
             if onu_device.oper_status != OperStatus.DISCOVERED:
@@ -513,15 +532,8 @@ class OpenoltDevice(object):
                 return
 
             # Device was in Discovered state, setting it to active
-            onu_adapter_agent = \
-                registry('adapter_loader').get_agent(onu_device.adapter)
-            if onu_adapter_agent is None:
-                self.log.error('onu_adapter_agent-could-not-be-retrieved',
-                               onu_device=onu_device)
-                return
 
             # Prepare onu configuration
-
             # If we are using the old/current broadcom adapter otherwise
             # use the openomci adapter
             if onu_device.adapter == 'broadcom_onu':
@@ -597,10 +609,10 @@ class OpenoltDevice(object):
                               onu_indication=onu_indication, tcont=tcont,
                               gem_port=gem_port)
 
-                onu_adapter_agent.create_interface(onu_device, onu_indication)
                 onu_adapter_agent.create_tcont(onu_device, tcont,
                                                traffic_descriptor_data=None)
                 onu_adapter_agent.create_gemport(onu_device, gem_port)
+                onu_adapter_agent.create_interface(onu_device, onu_indication)
 
             else:
                 self.log.error('unsupported-openolt-onu-adapter')
@@ -908,8 +920,20 @@ class OpenoltDevice(object):
 
 
     def delete(self):
-        self.log.info('delete-olt - Not implemented yet',
-                      device_id=self.device_id)
+        self.log.info('deleting-olt', device_id=self.device_id,
+                      logical_device_id=self.logical_device_id)
+
+        try:
+            # Rebooting to reset the state
+            self.reboot()
+            # Removing logical device
+            self.proxy.remove('/logical_devices/{}'.
+                              format(self.logical_device_id))
+        except Exception as e:
+            self.log.error('Failure to delete openolt device', error=e)
+            raise e
+        else:
+            self.log.info('successfully-deleted-olt', device_id=self.device_id)
 
 
     def reenable(self):
