@@ -66,7 +66,7 @@ sudo update-ca-certificates
 
 # Test local CA approves https server cert
 # Ask Matt Jeanneret for credentials
-curl -u #<provided-username# -v https://docker-repo.dev.atl.foundry.att.com:5000/v2/_catalog
+curl -u #provided-username# -v https://docker-repo.dev.atl.foundry.att.com:5000/v2/_catalog
 
 sudo systemctl start docker
 sudo systemctl start kubelet
@@ -118,7 +118,8 @@ sudo chown -R $(id -u):$(id -g) /var/lib/voltha-runtime
 # kubeadm doesnt like swap
 sudo swapoff -a
 
-sudo kubeadm init
+sudo kubeadm init --pod-network-cidr=192.168.0.0/16
+
 ### COPY RESULTS into ~/kubeadm-setup.txt
 
 # make non-root user able to use kubectl
@@ -129,12 +130,6 @@ sudo chown $(id -u):$(id -g) $HOME/.kube/config
 ## VERIFY BASICS
 
 kubectl get all --all-namespaces
-
-
-### NOT SURE THIS IS NEEDED. i skipped most recently... leave off for now
-kubectl -n kube-system get ds -l 'k8s-app==kube-proxy' -o json \
-| jq '.items[0].spec.template.spec.containers[0].command |= .+ ["--proxy-mode=userspace"]' \
-| kubectl apply -f - && kubectl -n kube-system delete pods -l 'k8s-app==kube-proxy'
 
 # allow master node to run deployments
 
@@ -147,7 +142,9 @@ git clone https://github.com/donNewtonAlpha/voltha.git
 cd ~/source/voltha/k8s/
 
 # setup container networking.
-kubectl apply -f calico-1.6.yml 
+kubectl apply -f foundry-node/foundry-k8s-cluster/calico-rbac-kdd.yaml
+kubectl apply -f foundry-node/foundry-k8s-cluster/calico-3.1.3-k8setcd.yaml 
+
 
 
 
@@ -157,7 +154,6 @@ kubectl get pods --all-namespaces
 kubectl get all --all-namespaces
 
 # verify calico networking a dns
-dig +short @10.96.0.10 calico-etcd.kube-system.svc.cluster.local
 dig +short @10.96.0.10 kubernetes.default.svc.cluster.local
 dig +short @10.96.0.10 SRV _https._tcp.kubernetes.default.svc.cluster.local
 
@@ -168,6 +164,17 @@ dig +short @10.96.0.10 SRV _https._tcp.kubernetes.default.svc.cluster.local
 
 kubectl apply -f namespace.yml 
 kubectl apply -f ingress/
+
+
+## add foundry docker-repo username/password to k8s so it can pull images
+# again, get the username/password from Matt Jeanneret
+
+kubectl create secret docker-registry foundrykey --docker-server=docker-repo.dev.atl.foundry.att.com:5000 --docker-username=#provided-username# --docker-password=#provided-password#
+kubectl create secret docker-registry foundrykey -n voltha --docker-server=docker-repo.dev.atl.foundry.att.com:5000 --docker-username=#provided-username# --docker-password=#provided-password#
+
+kubectl patch serviceaccount default -p '{"imagePullSecrets": [{"name": "foundrykey"}]}'
+kubectl patch serviceaccount default -n voltha -p '{"imagePullSecrets": [{"name": "foundrykey"}]}'
+
 
 # BASE COMPONENTS
 
@@ -191,7 +198,6 @@ kubectl logs etcd-0 -n voltha
 ls -atlrR /var/lib/voltha-runtime/
 
 
-
 ### VOLTHA CORE AND ACCESSORY CONTAINERS ####
 
 kubectl apply -f foundry-node/vcore_for_etcd_repo.yml
@@ -199,7 +205,6 @@ kubectl apply -f foundry-node/ofagent_repo.yml
 kubectl apply -f foundry-node/envoy_for_etcd_repo.yml 
 kubectl apply -f foundry-node/vcli_repo.yml 
 kubectl apply -f foundry-node/netconf_repo.yml 
-kubectl apply -f foundry-node/stats_repo.yml
 
 ## edit onos network config to reflect your OLT hardware.  Otherwise copy as-is
 cp ~/source/voltha/onos-config/network-cfg.json /var/lib/voltha-runtime/onos/config/
