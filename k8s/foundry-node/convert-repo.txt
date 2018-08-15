@@ -1,5 +1,5 @@
 #
-# Convert "insecure" access to foundry docker repo to TLS secured and authenticated
+# Convert "insecure" access to foundry docker repo to TLS secured
 #
 # This assumes youve been using the old way described in previous versions of foundry-kube-voltha-setup.txt
 #
@@ -59,24 +59,9 @@ systemctl start kubelet
 exit
 
 
-
-# Install the docker repo credentials as your non-root/development user.  The user you "docker pull" as
-docker login docker-repo.dev.atl.foundry.att.com:5000
-
-# Ask Matt Jeanneret for credentials
-
 # Test local CA approves https server cert
-curl -u #provided-username# -v https://docker-repo.dev.atl.foundry.att.com:5000/v2/_catalog
+curl -v https://docker-repo.dev.atl.foundry.att.com:5000/v2/_catalog
 
 # Test docker pull
 docker pull docker-repo.dev.atl.foundry.att.com:5000/ubuntu:16.04
-
-# Tell k8s about the credentials.  Do for each namespace where images may be pulled.  default, voltha
-
-kubectl create secret docker-registry foundrykey --docker-server=docker-repo.dev.atl.foundry.att.com:5000 --docker-username=#provided-username# --docker-password=#provided-password#
-kubectl create secret docker-registry foundrykey -n voltha --docker-server=docker-repo.dev.atl.foundry.att.com:5000 --docker-username=#provided-username# --docker-password=#provided-password#
-
-kubectl patch serviceaccount default -p '{"imagePullSecrets": [{"name": "foundrykey"}]}'
-kubectl patch serviceaccount default -n voltha -p '{"imagePullSecrets": [{"name": "foundrykey"}]}'
-
 

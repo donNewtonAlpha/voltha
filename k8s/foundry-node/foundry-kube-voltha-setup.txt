@@ -64,10 +64,6 @@ EOF
 # Apply the addition of the cert.  Should say "1 cert added"
 sudo update-ca-certificates
 
-# Test local CA approves https server cert
-# Ask Matt Jeanneret for credentials
-curl -u #provided-username# -v https://docker-repo.dev.atl.foundry.att.com:5000/v2/_catalog
-
 sudo systemctl start docker
 sudo systemctl start kubelet
 sudo systemctl enable docker
@@ -77,13 +73,6 @@ sudo systemctl status kubelet
 # loaded is ok for kubelet. it will exit-loop until a k8s cluster is setup
 
 sudo usermod -aG docker <non-root-user>
-
-# Install the docker repo credentials as your non-root/development user.  The user you "docker pull" as
-# Ask Matt Jeanneret for credentials
-docker login docker-repo.dev.atl.foundry.att.com:5000
-
-# Test docker pull
-docker pull docker-repo.dev.atl.foundry.att.com:5000/ubuntu:16.04
 
 ## Add the k8s resolver into the top of the hosts resolver search list
 ## the actual resolver will be installed below.  
@@ -164,16 +153,6 @@ dig +short @10.96.0.10 SRV _https._tcp.kubernetes.default.svc.cluster.local
 
 kubectl apply -f namespace.yml 
 kubectl apply -f ingress/
-
-
-## add foundry docker-repo username/password to k8s so it can pull images
-# again, get the username/password from Matt Jeanneret
-
-kubectl create secret docker-registry foundrykey --docker-server=docker-repo.dev.atl.foundry.att.com:5000 --docker-username=#provided-username# --docker-password=#provided-password#
-kubectl create secret docker-registry foundrykey -n voltha --docker-server=docker-repo.dev.atl.foundry.att.com:5000 --docker-username=#provided-username# --docker-password=#provided-password#
-
-kubectl patch serviceaccount default -p '{"imagePullSecrets": [{"name": "foundrykey"}]}'
-kubectl patch serviceaccount default -n voltha -p '{"imagePullSecrets": [{"name": "foundrykey"}]}'
 
 
 # BASE COMPONENTS
