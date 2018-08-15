@@ -540,4 +540,16 @@ class Main(object):
 
 
 if __name__ == '__main__':
+    import pydevd
+    try:
+        pydevd.settrace("10.64.10.181", port=4444, stdoutToServer=True, stderrToServer=True)
+
+
+    except Exception as err:
+        foo = True  # just ignore this since there isnt a listner on the other end.
+
+    """
+    Just placeholder to force a reconfig......
+
+    """
     Main().start()
