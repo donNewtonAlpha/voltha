@@ -186,6 +186,7 @@ class OpenoltDevice(object):
         self.alarm_mgr = OpenOltAlarmMgr(self.log, self.adapter_agent,
                                          self.device_id,
                                          self.logical_device_id)
+        # change to add in the kpis templates in extensions
         self.stats_mgr = OpenOltStatisticsMgr(self, self.log)
         self.bw_mgr = OpenOltBW(self.log, self.proxy)
 
