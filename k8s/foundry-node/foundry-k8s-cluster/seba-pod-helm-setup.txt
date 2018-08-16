@@ -1,0 +1,72 @@
+
+cd ~/source
+
+# clone needed repos
+git clone https://github.com/donNewtonAlpha/voltha.git
+git clone https://bitbucket.org/onfcord/podconfigs.git
+git clone https://gerrit.opencord.org/seba
+git clone https://gerrit.opencord.org/helm-charts
+
+
+# install helm
+wget https://storage.googleapis.com/kubernetes-helm/helm-v2.9.1-linux-amd64.tar.gz
+mkdir helm-unpack
+cd helm-unpack/
+tar -zxvf ../helm-v2.9.1-linux-amd64.tar.gz
+sudo cp linux-amd64/helm /usr/local/bin/
+
+cd ~/source/voltha/k8s/foundry-node/foundry-k8s-cluster
+kubectl apply -f helm-role.yaml
+helm init --service-account tiller
+export HELM_HOME=/home/foundry/.helm
+
+
+# 
+# install cord helm charts. xos, onos, voltha etc
+# see https://guide.opencord.org/profiles/rcord/workflows/att.html
+#
+
+cd ~/source/helm-charts/
+helm repo add incubator https://kubernetes-charts-incubator.storage.googleapis.com/
+helm repo add cord https://charts.opencord.org/master
+helm repo update
+helm repo list
+
+# to delete everything
+helm delete --purge att-workflow cord-kafka kafkacat onos-fabric onos-voltha voltha xos-core
+
+helm dep update xos-core
+helm install -n xos-core xos-core
+helm install -n cord-kafka incubator/kafka --set replicas=1 --set persistence.enabled=false --set zookeeper.servers=1 --set zookeeper.persistence.enabled=false 
+
+helm dep update voltha
+helm install -n voltha voltha --set etcd-operator.customResources.createEtcdClusterCRD=false -f ~/source/voltha/k8s/foundry-node/foundry-k8s-cluster/att-seba-voltha-values.yaml
+
+helm dep update onos
+helm install -n onos-voltha onos -f ~/source/helm-charts/configs/onos-voltha.yaml
+helm install -n onos-fabric onos -f ~/source/voltha/k8s/foundry-node/foundry-k8s-cluster/att-seba-fabric-values.yaml
+helm upgrade voltha voltha --set etcd-operator.customResources.createEtcdClusterCRD=true -f ~/source/voltha/k8s/foundry-node/foundry-k8s-cluster/att-seba-voltha-values.yaml
+
+helm dep update xos-profiles/att-workflow
+helm install -n att-workflow xos-profiles/att-workflow -f ~/source/voltha/k8s/foundry-node/foundry-k8s-cluster/att-seba-profile-values.yaml
+
+
+
+## below is where provisioning starts.  these keep changing and is a bit of a mess
+
+cd ~/source/podconfigs/tosca/att-workflow
+
+~/source/voltha/k8s/foundry-node/foundry-k8s-cluster/quick-onos-update.sh seba-netcfg-update.json
+
+localip=10.64.10.X
+
+curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --data-binary @pod-configuration.yaml http://${localip}:30007/run
+curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --data-binary @pod-olt.yaml http://${localip}:30007/run
+curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --data-binary @add-whitelist.yaml http://${localip}:30007/run
+curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --data-binary @subscriber.yaml http://${localip}:30007/run
+
+
+# troubleshoot auth events
+helm install -n kafkacat ~/source/helm-charts/xos-tools/kafkacat
+kubectl exec -ti kafkacat-86bf65f7f7-8w5m2 -- kafkacat -b cord-kafka -t authentication.events
+

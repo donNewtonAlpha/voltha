@@ -11,17 +11,23 @@ hippie-oss:
  hippieOSS_synchronizerImage: "xosproject/hippie-oss-synchronizer:master"
 
 voltha:
-  envoyForEtcdImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-envoy:1.0'
-  netconfImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-netconf:1.0'
-  ofagentImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-ofagent:1.0'
+  envoyForEtcdImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-envoy:1.1'
+  netconfImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-netconf:1.1'
+  ofagentImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-ofagent:1.7.16'
   dashdImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-dashd:1.0'
   shovelImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-shovel:1.0'
-  vcliImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-cli:1.0'
+  vcliImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-cli:1.7.16'
   vcoreImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-voltha:matt-test'
-
-onos-voltha:
-  onosImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-onos:seba-test'
+  imagePullPolicy: IfNotPresent
 
 onos-fabric:
   onosImage: "docker-repo.dev.atl.foundry.att.com:5000/onosproject/onos:jono"
+  imagePullPolicy: IfNotPresent
 
+# onos-voltha applications
+cordConfigAppUrl: "https://oss.sonatype.org/service/local/repositories/releases/content/org/opencord/cord-config/1.4.0/cord-config-1.4.0.oar"
+oltAppUrl: "http://charts.dev.atl.foundry.att.com:4080/oar/olt-app-2.0.0-SNAPSHOT.oar"
+sadisAppUrl: "https://oss.sonatype.org/service/local/repositories/releases/content/org/opencord/sadis-app/2.1.0/sadis-app-2.1.0.oar"
+dhcpl2relayAppUrl: "https://oss.sonatype.org/service/local/artifact/maven/redirect?r=snapshots&g=org.opencord&a=dhcpl2relay&v=1.5.0-SNAPSHOT&e=oar"
+aaaAppUrl: "http://charts.dev.atl.foundry.att.com:4080/oar/aaa-1.8.0-SNAPSHOT.oar"
+kafkaAppUrl: "http://charts.dev.atl.foundry.att.com:4080/oar/kafka-1.0.0-SNAPSHOT.oar"
