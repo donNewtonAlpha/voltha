@@ -39,9 +39,10 @@ helm dep update xos-core
 helm install -n xos-core xos-core
 helm install -n cord-kafka incubator/kafka --set replicas=1 --set persistence.enabled=false --set zookeeper.servers=1 --set zookeeper.persistence.enabled=false 
 
-helm dep build voltha
-helm install -n voltha-kafka incubator/kafka --set replicas=1 --set persistence.enabled=false --set zookeeper.servers=1 --set zookeeper.persistence.enabled=false 
+helm dep update voltha
 helm install -n voltha voltha --set etcd-operator.customResources.createEtcdClusterCRD=false -f ~/source/voltha/k8s/foundry-node/foundry-k8s-cluster/att-seba-voltha-values.yaml
+
+helm dep update onos
 helm install -n onos-voltha onos -f ~/source/helm-charts/configs/onos-voltha.yaml
 helm install -n onos-fabric onos -f ~/source/voltha/k8s/foundry-node/foundry-k8s-cluster/att-seba-fabric-values.yaml
 helm upgrade voltha voltha --set etcd-operator.customResources.createEtcdClusterCRD=true -f ~/source/voltha/k8s/foundry-node/foundry-k8s-cluster/att-seba-voltha-values.yaml
