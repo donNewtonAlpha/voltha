@@ -33,7 +33,7 @@ helm repo update
 helm repo list
 
 # to delete everything
-helm delete --purge att-workflow cord-kafka kafkacat onos-fabric onos-voltha voltha voltha-kafka xos-core
+helm delete --purge att-workflow cord-kafka kafkacat onos-fabric onos-voltha voltha xos-core
 
 helm dep update xos-core
 helm install -n xos-core xos-core
