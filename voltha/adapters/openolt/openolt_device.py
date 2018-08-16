@@ -182,7 +182,8 @@ class OpenoltDevice(object):
         self.adapter_agent.update_device(device)
 
         self.stub = openolt_pb2_grpc.OpenoltStub(self.channel)
-        self.flow_mgr = OpenOltFlowMgr(self.log, self.stub, self.device_id)
+        self.flow_mgr = OpenOltFlowMgr(self.log, self.stub, self.device_id,
+                                       self.logical_device_id)
         self.alarm_mgr = OpenOltAlarmMgr(self.log, self.adapter_agent,
                                          self.device_id,
                                          self.logical_device_id)
@@ -477,20 +478,10 @@ class OpenoltDevice(object):
                 # Forcing the oper state change code to execute
                 onu_indication.oper_state = 'down'
 
-            if onu_device.admin_state != AdminState.DISABLED:
-                onu_device.admin_state = AdminState.DISABLED
-                self.adapter_agent.update(onu_device)
-                self.log.debug('putting-onu-in-disabled-state',
-                               onu_serial_number=onu_device.serial_number)
-
             # Port and logical port update is taken care of by oper state block
 
         elif onu_indication.admin_state == 'up':
-            if onu_device.admin_state != AdminState.ENABLED:
-                onu_device.admin_state = AdminState.ENABLED
-                self.adapter_agent.update(onu_device)
-                self.log.debug('putting-onu-in-enabled-state',
-                               onu_serial_number=onu_device.serial_number)
+            pass
 
         else:
             self.log.warn('Invalid-or-not-implemented-admin-state',
@@ -827,6 +818,29 @@ class OpenoltDevice(object):
 
         return port_no, label
 
+    def delete_logical_port(self, child_device_id):
+        logical_ports = self.proxy.get('/logical_devices/{}/ports'.format(
+            self.logical_device_id))
+        for logical_port in logical_ports:
+            if logical_port.device_id == child_device_id:
+                self.log.debug('delete-logical-port',
+                               onu_device_id=child_device_id,
+                               logical_port=logical_port)
+                self.adapter_agent.delete_logical_port(
+                    self.logical_device_id, logical_port)
+                return
+    def delete_port(self, child_serial_number):
+        ports = self.proxy.get('/devices/{}/ports'.format(
+            self.device_id))
+        for port in ports:
+            if port.label == child_serial_number:
+                self.log.debug('delete-port',
+                               onu_serial_number=child_serial_number,
+                               port=port)
+                self.adapter_agent.delete_port(self.device_id, port)
+                return
+
+
     def new_onu_id(self, intf_id):
         onu_id = None
         onu_devices = self.adapter_agent.get_child_devices(self.device_id)
@@ -853,43 +867,40 @@ class OpenoltDevice(object):
                 hex(ord(vendor_specific[3]) & 0x0f)[2:]])
 
     def update_flow_table(self, flows):
-        if not self.is_state_up() and not self.is_state_connected():
-            self.log.info('OLT is down, ignore update flow table')
-            return
+        self.log.debug('No updates here now, all is done in logical flows '
+                       'update')
 
-        device = self.adapter_agent.get_device(self.device_id)
-        self.log.debug('update flow table', number_of_flows=len(flows))
 
-        for flow in flows:
-            is_down_stream = None
-            in_port = fd.get_in_port(flow)
-            assert in_port is not None
-            # Right now there is only one NNI port. Get the NNI PORT and
-            # compare with IN_PUT port number. Need to find better way.
-            ports = self.adapter_agent.get_ports(device.id, Port.ETHERNET_NNI)
+    def update_logical_flows(self, flows_to_add, flows_to_remove,
+                             device_rules_map):
 
-            for port in ports:
-                if (port.port_no == in_port):
-                    self.log.debug('downstream-flow', in_port=in_port)
-                    is_down_stream = True
-                    break
-            if is_down_stream is None:
-                is_down_stream = False
-                self.log.debug('upstream-flow', in_port=in_port)
+        self.log.debug('logical flows update', flows_to_add=flows_to_add,
+            flows_to_remove=flows_to_remove)
 
-            for flow in flows:
-                try:
-                    self.flow_mgr.add_flow(flow, is_down_stream)
-                except grpc.RpcError as grpc_e:
-                    if grpc_e.code() == grpc.StatusCode.ALREADY_EXISTS:
-                        self.log.warn('flow already exists', e=grpc_e,
-                                      flow=flow)
-                    else:
-                        self.log.error('failed to add flow', flow=flow,
-                                       e=grpc_e)
-                except Exception as e:
-                    self.log.error('failed to add flow', flow=flow, e=e)
+        for flow in flows_to_add:
 
+            try:
+                self.flow_mgr.add_flow(flow)
+            except grpc.RpcError as grpc_e:
+                if grpc_e.code() == grpc.StatusCode.ALREADY_EXISTS:
+                    self.log.warn('flow already exists', e=grpc_e,
+                                   flow=flow)
+                else:
+                    self.log.error('failed to add flow', flow=flow,
+                                   grpc_error=grpc_e)
+            except Exception as e:
+                self.log.error('failed to add flow', flow=flow, e=e)
+
+        self.flow_mgr.update_children_flows(device_rules_map)
+
+        for flow in flows_to_remove:
+
+            try:
+                self.flow_mgr.remove_flow(flow)
+            except Exception as e:
+                self.log.error('failed to remove flow', flow=flow, e=e)
+
+    # There has to be a better way to do this
     def ip_hex(self, ip):
         octets = ip.split(".")
         hex_ip = []
@@ -971,6 +982,19 @@ class OpenoltDevice(object):
                        olt_device_id=self.device_id,
                        onu_device=child_device,
                        onu_serial_number=child_device.serial_number)
+        try:
+            self.adapter_agent.delete_child_device(self.device_id,
+                                               child_device.id, child_device)
+        except Exception as e:
+            self.log.error('adapter_agent error', error=e)
+        try:
+            self.delete_logical_port(child_device.id)
+        except Exception as e:
+            self.log.error('logical_port delete error', error=e)
+        try:
+            self.delete_port(child_device.serial_number)
+        except Exception as e:
+            self.log.error('port delete error', error=e)
         vendor_id = child_device.vendor_id.encode('hex')
         vendor_specific = child_device.serial_number.replace(
             child_device.vendor_id, '').encode('hex')
