@@ -335,6 +335,13 @@ git clone https://gerrit.opencord.org/helm-charts
 
 cd helm-charts
 
+helm repo add incubator https://kubernetes-charts-incubator.storage.googleapis.com/
+helm repo add cord https://charts.opencord.org/master
+helm repo update
+helm repo list
+
+helm install -n cord-kafka incubator/kafka --set replicas=1 --set persistence.enabled=false --set zookeeper.servers=1 --set zookeeper.persistence.enabled=false
+
 helm dep update voltha
 helm install -n voltha voltha --set etcd-operator.customResources.createEtcdClusterCRD=false -f ~/foundry-k8s-cluster/att-seba-voltha-values.yaml
 
