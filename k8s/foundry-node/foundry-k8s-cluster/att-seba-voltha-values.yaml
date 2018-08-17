@@ -7,5 +7,5 @@ ofagentImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-ofagent:1.7.16'
 dashdImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-dashd:1.0'
 shovelImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-shovel:1.0'
 vcliImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-cli:1.7.16'
-vcoreImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-voltha:gold.7.16'
+vcoreImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-voltha:gold.7.26'
 

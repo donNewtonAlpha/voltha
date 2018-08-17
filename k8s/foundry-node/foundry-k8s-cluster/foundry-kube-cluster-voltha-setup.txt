@@ -346,7 +346,7 @@ helm dep update voltha
 helm install -n voltha voltha --set etcd-operator.customResources.createEtcdClusterCRD=false -f ~/foundry-k8s-cluster/att-seba-voltha-values.yaml
 
 helm dep update onos
-helm install -n onos-voltha onos -f ~/source/helm-charts/configs/onos-voltha.yaml
+helm install -n onos-voltha onos -f ~/foundry-k8s-cluster/att-seba-onos-voltha-values.yaml
 
 # give voltha a minute to install.  verify with kubectl get pods
 sleep 30
@@ -410,8 +410,8 @@ kubectl get pods --all-namespaces -o wide
 
 # TODO:  properly inject onos config for olt, aaa, and sadis
 # for now just run curl shell script to inject needed config
-cd ..
-./netcfg-update.sh
+cd ~/foundry-k8s-cluster
+./quick-onos-update.sh master0 ~/source/voltha/onos-config/network-cfg.json
 
 
 # verify cluster operation
