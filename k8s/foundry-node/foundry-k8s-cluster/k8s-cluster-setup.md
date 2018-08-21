@@ -1,4 +1,4 @@
-# KUBERNETES 3 SERVER CLUSTER BUILD NOTES/SCRIPT
+# KUBERNETES 3 SERVER CLUSTER BUILD NOTES
 
 
 Requires three hosts.  8 cpu, 16gb memory, 100GB disk.  
@@ -418,9 +418,11 @@ helm repo add incubator https://kubernetes-charts-incubator.storage.googleapis.c
 helm update
 ~~~
 
-Verify
+Verify helm running
 
 ~~~
+kubectl get pods --all-namespaces -o wide |grep tiller
+
 helm list
 # should be empty
 
@@ -430,8 +432,8 @@ help repo list
 
 ## Finished
 
-At this point you have a basic 3 server k8s cluster where each master can take workloads
-from here you can install basic voltha or full seba pod using helm.  
+At this point you have a basic 3 server k8s cluster where each master can take workloads.
+From here you can install basic voltha or full seba pod using helm.  
 
 
 
