@@ -346,10 +346,10 @@ helm dep update voltha
 helm install -n voltha voltha --set etcd-operator.customResources.createEtcdClusterCRD=false -f ~/foundry-k8s-cluster/att-seba-voltha-values.yaml
 
 helm dep update onos
-helm install -n onos-voltha onos -f ~/foundry-k8s-cluster/att-seba-onos-voltha-values.yaml
+helm install -n onos-voltha onos -f ~/foundry-k8s-cluster/att-seba-onos-voltha.yaml
 
-# give voltha a minute to install.  verify with kubectl get pods
-sleep 30
+# give voltha a couple minutes to install.  verify with kubectl get pods
+sleep 120
 helm upgrade voltha voltha --set etcd-operator.customResources.createEtcdClusterCRD=true -f ~/foundry-k8s-cluster/att-seba-voltha-values.yaml
 
 
@@ -360,72 +360,70 @@ helm upgrade voltha voltha --set etcd-operator.customResources.createEtcdCluster
 
 kubectl get pods --all-namespaces -o wide
 
-##  
-##  NAMESPACE     NAME                                                          READY     STATUS    RESTARTS   AGE       IP                NODE
-##  default       etcd-cluster-0                                                1/1       Running   0          1m        192.168.252.246   kube-07
-##  default       etcd-cluster-1                                                1/1       Running   0          3m        192.168.77.158    kube-08
-##  default       etcd-cluster-2                                                1/1       Running   0          2m        192.168.183.26    kube-06
-##  default       voltha-kafka-0                                                1/1       Running   2          4m        192.168.252.244   kube-07
-##  default       voltha-kafka-1                                                1/1       Running   0          2m        192.168.183.25    kube-06
-##  default       voltha-kafka-2                                                1/1       Running   0          1m        192.168.77.160    kube-08
-##  default       voltha-zookeeper-0                                            1/1       Running   0          4m        192.168.183.24    kube-06
-##  default       voltha-zookeeper-1                                            1/1       Running   0          3m        192.168.252.245   kube-07
-##  default       voltha-zookeeper-2                                            1/1       Running   0          3m        192.168.77.159    kube-08
-##  kube-system   calico-kube-controllers-5cc6fcf4d9-4tfss                      1/1       Running   1          20m       10.64.1.102       kube-08
-##  kube-system   calico-node-7xb6p                                             2/2       Running   2          20m       10.64.1.162       kube-06
-##  kube-system   calico-node-8gw7s                                             2/2       Running   2          20m       10.64.1.152       kube-07
-##  kube-system   calico-node-xsvgb                                             2/2       Running   2          20m       10.64.1.102       kube-08
-##  kube-system   kube-apiserver-kube-06                                        1/1       Running   21         41m       10.64.1.162       kube-06
-##  kube-system   kube-apiserver-kube-07                                        1/1       Running   21         1h        10.64.1.152       kube-07
-##  kube-system   kube-apiserver-kube-08                                        1/1       Running   21         1h        10.64.1.102       kube-08
-##  kube-system   kube-controller-manager-kube-06                               1/1       Running   5          41m       10.64.1.162       kube-06
-##  kube-system   kube-controller-manager-kube-07                               1/1       Running   5          55m       10.64.1.152       kube-07
-##  kube-system   kube-controller-manager-kube-08                               1/1       Running   6          40m       10.64.1.102       kube-08
-##  kube-system   kube-dns-86f4d74b45-hk5ps                                     3/3       Running   3          21m       192.168.77.139    kube-08
-##  kube-system   kube-dns-86f4d74b45-p6rqb                                     3/3       Running   3          20m       192.168.252.220   kube-07
-##  kube-system   kube-dns-86f4d74b45-pqv8j                                     3/3       Running   3          20m       192.168.183.17    kube-06
-##  kube-system   kube-proxy-7bxr6                                              1/1       Running   1          21m       10.64.1.102       kube-08
-##  kube-system   kube-proxy-9xr54                                              1/1       Running   1          21m       10.64.1.152       kube-07
-##  kube-system   kube-proxy-rstbh                                              1/1       Running   1          21m       10.64.1.162       kube-06
-##  kube-system   kube-scheduler-kube-06                                        1/1       Running   6          41m       10.64.1.162       kube-06
-##  kube-system   kube-scheduler-kube-07                                        1/1       Running   6          41m       10.64.1.152       kube-07
-##  kube-system   kube-scheduler-kube-08                                        1/1       Running   7          56m       10.64.1.102       kube-08
-##  kube-system   master0-etcd-kube-06                                          1/1       Running   9          41m       10.64.1.162       kube-06
-##  kube-system   master1-etcd-kube-07                                          1/1       Running   8          55m       10.64.1.152       kube-07
-##  kube-system   master2-etcd-kube-08                                          1/1       Running   9          41m       10.64.1.102       kube-08
-##  kube-system   tiller-deploy-5c688d5f9b-5mqrt                                1/1       Running   1          15m       192.168.252.217   kube-07
-##  voltha        dashd-57cdb689cc-b8l9k                                        1/1       Running   3          4m        192.168.77.156    kube-08
-##  voltha        default-http-backend-5c6d95c48-c7zkt                          1/1       Running   0          4m        192.168.183.22    kube-06
-##  voltha        grafana-5cbd57c584-cm2ll                                      1/1       Running   0          4m        192.168.183.20    kube-06
-##  voltha        netconf-6b9f65df49-kc4ck                                      1/1       Running   0          4m        192.168.252.240   kube-07
-##  voltha        nginx-ingress-controller-566c84c9fd-fl8wm                     1/1       Running   0          4m        192.168.252.243   kube-07
-##  voltha        ofagent-5b9d98975b-wnlzt                                      1/1       Running   0          4m        192.168.183.21    kube-06
-##  voltha        onos-voltha-6676c46bbc-z6srd                                  1/1       Running   0          3m        192.168.77.157    kube-08
-##  voltha        shovel-688ff789cc-7zltw                                       1/1       Running   2          4m        192.168.183.23    kube-06
-##  voltha        vcli-67587c7988-bch42                                         1/1       Running   0          4m        192.168.77.154    kube-08
-##  voltha        vcore-7c6b898789-zvfxn                                        1/1       Running   0          4m        192.168.252.241   kube-07
-##  voltha        voltha-65cc8fd59f-k66z5                                       1/1       Running   1          4m        192.168.77.155    kube-08
+##  NAMESPACE     NAME                                                          READY     STATUS    RESTARTS   AGE       IP              NODE          NOMINATED NODE
+##  default       cord-kafka-0                                                  1/1       Running   1          3d        192.168.1.4     nwnn-vgp-01   <none>
+##  default       cord-kafka-zookeeper-0                                        1/1       Running   0          3d        192.168.0.6     nwnn-vgp-02   <none>
+##  default       cord-kafka-zookeeper-1                                        1/1       Running   0          3d        192.168.2.4     nwnn-vgp-03   <none>
+##  default       cord-kafka-zookeeper-2                                        1/1       Running   0          3d        192.168.1.5     nwnn-vgp-01   <none>
+##  default       etcd-cluster-0000                                             1/1       Running   0          3d        192.168.1.10    nwnn-vgp-01   <none>
+##  default       etcd-cluster-0001                                             1/1       Running   0          3d        192.168.0.11    nwnn-vgp-02   <none>
+##  default       etcd-cluster-0002                                             1/1       Running   0          3d        192.168.2.9     nwnn-vgp-03   <none>
+##  default       onos-voltha-57569b6f6b-b562l                                  1/1       Running   0          3d        192.168.1.11    nwnn-vgp-01   <none>
+##  default       voltha-etcd-operator-etcd-backup-operator-5546b97d78-x64k4    1/1       Running   0          3d        192.168.1.6     nwnn-vgp-01   <none>
+##  default       voltha-etcd-operator-etcd-operator-5dfd48694f-5wvwk           1/1       Running   0          3d        192.168.2.5     nwnn-vgp-03   <none>
+##  default       voltha-etcd-operator-etcd-restore-operator-7c9ff9c9cd-ps5wd   1/1       Running   0          3d        192.168.0.7     nwnn-vgp-02   <none>
+##  kube-system   calico-node-28dzj                                             2/2       Running   0          3d        10.242.11.206   nwnn-vgp-01   <none>
+##  kube-system   calico-node-5mkqq                                             2/2       Running   0          3d        10.242.11.207   nwnn-vgp-03   <none>
+##  kube-system   calico-node-94wzf                                             2/2       Running   0          3d        10.242.11.209   nwnn-vgp-02   <none>
+##  kube-system   coredns-7fb46d7cdd-9srll                                      1/1       Running   0          3d        192.168.2.2     nwnn-vgp-03   <none>
+##  kube-system   coredns-7fb46d7cdd-b7krl                                      1/1       Running   0          3d        192.168.1.2     nwnn-vgp-01   <none>
+##  kube-system   coredns-7fb46d7cdd-qjg5d                                      1/1       Running   0          3d        192.168.0.5     nwnn-vgp-02   <none>
+##  kube-system   kube-apiserver-nwnn-vgp-01                                    1/1       Running   0          3d        10.242.11.206   nwnn-vgp-01   <none>
+##  kube-system   kube-apiserver-nwnn-vgp-02                                    1/1       Running   0          3d        10.242.11.209   nwnn-vgp-02   <none>
+##  kube-system   kube-apiserver-nwnn-vgp-03                                    1/1       Running   0          3d        10.242.11.207   nwnn-vgp-03   <none>
+##  kube-system   kube-controller-manager-nwnn-vgp-01                           1/1       Running   0          3d        10.242.11.206   nwnn-vgp-01   <none>
+##  kube-system   kube-controller-manager-nwnn-vgp-02                           1/1       Running   0          3d        10.242.11.209   nwnn-vgp-02   <none>
+##  kube-system   kube-controller-manager-nwnn-vgp-03                           1/1       Running   0          3d        10.242.11.207   nwnn-vgp-03   <none>
+##  kube-system   kube-proxy-bkh6l                                              1/1       Running   0          3d        10.242.11.207   nwnn-vgp-03   <none>
+##  kube-system   kube-proxy-hppp8                                              1/1       Running   0          3d        10.242.11.209   nwnn-vgp-02   <none>
+##  kube-system   kube-proxy-tp2tp                                              1/1       Running   0          3d        10.242.11.206   nwnn-vgp-01   <none>
+##  kube-system   kube-scheduler-nwnn-vgp-01                                    1/1       Running   0          3d        10.242.11.206   nwnn-vgp-01   <none>
+##  kube-system   kube-scheduler-nwnn-vgp-02                                    1/1       Running   0          3d        10.242.11.209   nwnn-vgp-02   <none>
+##  kube-system   kube-scheduler-nwnn-vgp-03                                    1/1       Running   0          3d        10.242.11.207   nwnn-vgp-03   <none>
+##  kube-system   master0-etcd-nwnn-vgp-01                                      1/1       Running   0          3d        10.242.11.206   nwnn-vgp-01   <none>
+##  kube-system   master1-etcd-nwnn-vgp-02                                      1/1       Running   0          3d        10.242.11.209   nwnn-vgp-02   <none>
+##  kube-system   master2-etcd-nwnn-vgp-03                                      1/1       Running   0          3d        10.242.11.207   nwnn-vgp-03   <none>
+##  kube-system   tiller-deploy-759cb9df9-msmcp                                 1/1       Running   0          3d        192.168.2.3     nwnn-vgp-03   <none>
+##  voltha        default-http-backend-846b65fb5f-5bvzq                         1/1       Running   0          3d        192.168.1.9     nwnn-vgp-01   <none>
+##  voltha        freeradius-765c9b486c-f2kh2                                   1/1       Running   0          3d        192.168.2.7     nwnn-vgp-03   <none>
+##  voltha        netconf-7c6c5756c6-zgvkj                                      1/1       Running   0          3d        192.168.1.7     nwnn-vgp-01   <none>
+##  voltha        nginx-ingress-controller-6db99757f7-c8gxr                     1/1       Running   0          3d        192.168.2.6     nwnn-vgp-03   <none>
+##  voltha        ofagent-fcff87444-rjhdl                                       1/1       Running   0          3d        192.168.2.10    nwnn-vgp-03   <none>
+##  voltha        vcli-69f585cd6d-pscwc                                         1/1       Running   0          3d        192.168.1.8     nwnn-vgp-01   <none>
+##  voltha        vcore-0                                                       1/1       Running   0          3d        192.168.2.8     nwnn-vgp-03   <none>
+##  voltha        voltha-78749b49d5-xmwxn                                       1/1       Running   3          3d        192.168.0.8     nwnn-vgp-02   <none>
 
 
 
-# TODO:  properly inject onos config for olt, aaa, and sadis
-# for now just run curl shell script to inject needed config
+# Properly inject onos config for olt, aaa, and sadis
+# for now just run curl shell script to inject needed config.  xos/nem will provide this later
 cd ~/foundry-k8s-cluster
 ./quick-onos-update.sh master0 ~/source/voltha/onos-config/network-cfg.json
 
 
+#
 # verify cluster operation
 #
-# voltha/admin
-# ssh -p 5022 voltha@vcli.voltha.svc.cluster.local
+
+ssh -p 30110 voltha@master0
+# username/password voltha/admin
 #   devices 
 #   table should say empty
 #
-# karaf/karaf
-# ssh -p 8101 karaf@onos-voltha-ssh.voltha.svc.cluster.local
+
+ssh -p 30115 karaf@master0
+# username/password karaf/karaf
 #   apps -s -a
 #   should list the installed apps
-
-
 
 

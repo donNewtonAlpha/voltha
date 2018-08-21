@@ -33,7 +33,7 @@ helm repo update
 helm repo list
 
 # to delete everything
-helm delete --purge att-workflow cord-kafka kafkacat onos-fabric onos-voltha voltha xos-core
+helm delete --purge att-workflow cord-kafka onos-fabric onos-voltha voltha xos-core
 
 helm dep update xos-core
 helm install -n xos-core xos-core
@@ -45,28 +45,35 @@ helm install -n voltha voltha --set etcd-operator.customResources.createEtcdClus
 helm dep update onos
 helm install -n onos-voltha onos -f ~/source/helm-charts/configs/onos-voltha.yaml
 helm install -n onos-fabric onos -f ~/source/voltha/k8s/foundry-node/foundry-k8s-cluster/att-seba-fabric-values.yaml
+
+# seems to need some time before etcd-cluster-XXXX will start
+sleep 120
 helm upgrade voltha voltha --set etcd-operator.customResources.createEtcdClusterCRD=true -f ~/source/voltha/k8s/foundry-node/foundry-k8s-cluster/att-seba-voltha-values.yaml
 
 helm dep update xos-profiles/att-workflow
 helm install -n att-workflow xos-profiles/att-workflow -f ~/source/voltha/k8s/foundry-node/foundry-k8s-cluster/att-seba-profile-values.yaml
 
+# give the workflow pods time to populate models, load apps, etc.
+sleep 120
 
 
-## below is where provisioning starts.  these keep changing and is a bit of a mess
+
+## below is where provisioning starts.  these are specific to the QA pod so change yaml files to match your environment.
 
 cd ~/source/podconfigs/tosca/att-workflow
 
-~/source/voltha/k8s/foundry-node/foundry-k8s-cluster/quick-onos-update.sh seba-netcfg-update.json
+localip=10.64.1.X
 
-localip=10.64.10.X
+~/source/voltha/k8s/foundry-node/foundry-k8s-cluster/quick-onos-update.sh $localip foundry-simple-netcfg.json
 
-curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --data-binary @pod-configuration.yaml http://${localip}:30007/run
-curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --data-binary @pod-olt.yaml http://${localip}:30007/run
-curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --data-binary @add-whitelist.yaml http://${localip}:30007/run
-curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --data-binary @subscriber.yaml http://${localip}:30007/run
+curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --data-binary @foundry-pod-config.yaml http://${localip}:30007/run
+curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --data-binary @foundry-pod-olt.yaml http://${localip}:30007/run
+curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --data-binary @foundry-whitelist.yaml http://${localip}:30007/run
+curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --data-binary @foundry-subscribers.yaml http://${localip}:30007/run
 
 
-# troubleshoot auth events
+## only needed to troubleshoot auth events
+
 helm install -n kafkacat ~/source/helm-charts/xos-tools/kafkacat
 kubectl exec -ti kafkacat-86bf65f7f7-8w5m2 -- kafkacat -b cord-kafka -t authentication.events
 
