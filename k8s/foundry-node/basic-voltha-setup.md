@@ -17,9 +17,9 @@ sudo mkdir -p /var/lib/voltha-runtime/onos/config
 sudo chown -R $(id -u):$(id -g) /var/lib/voltha-runtime
 ```
 
-## Git clone ATT voltha.  Contains deployment yaml for specific pods and services.  
-Does NOT use helm.
-This was likely done already.
+## Git clone ATT voltha.  Contains deployment yaml for specific pods and services.  Does NOT use helm.
+
+Checkout repo, if not done already.
 ```
 mkdir -p ~/source
 cd ~/source
@@ -37,6 +37,7 @@ kubectl apply -f ingress/
 
 ## BASE COMPONENTS
 
+Non voltha specific software components.  
 These files have been edited to reflect persistent environment
 ```
 kubectl apply -f foundry-node/zookeeper_persist.yml
@@ -60,6 +61,7 @@ ls -atlrR /var/lib/voltha-runtime/
 
 ## VOLTHA CORE AND ACCESSORY CONTAINERS 
 
+Actual pods needed to run voltha. Edited to reflect ATT foundry docker repo 
 ```
 kubectl apply -f foundry-node/vcore_for_etcd_repo.yml
 kubectl apply -f foundry-node/ofagent_repo.yml 

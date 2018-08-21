@@ -1,21 +1,26 @@
-#
 # Convert "insecure" access to foundry docker repo to TLS secured
-#
-# This assumes youve been using the old way described in previous versions of foundry-kube-voltha-setup.txt
-#
+
+This assumes youve been using the old way described in previous versions of foundry-kube-voltha-setup.txt
 
 
-# Run the following as root till told otherwise
+Run the following as root till told otherwise
+```
 sudo bash
+```
 
-# Stop docker/kubelet as this is a global change.  This may take a while
+Stop docker/kubelet as this is a global change.  This may take a while
+```
 systemctl stop docker
 systemctl stop kubelet
+```
 
-# Remove old insecure repo exception
+Remove old insecure repo exception
+```
 rm /etc/docker/daemon.json
+```
 
-# Install the AT&T Foundry Atlanta CA cert at the system level.
+Install the AT&T Foundry Atlanta CA cert at the system level.
+```
 cat <<EOF > /usr/local/share/ca-certificates/att-foundry-atlanta-ca.crt
 -----BEGIN CERTIFICATE-----
 MIIE8DCCA9igAwIBAgIBADANBgkqhkiG9w0BAQUFADCBsDELMAkGA1UEBhMCVVMx
@@ -47,21 +52,32 @@ xWx6avSfPkUvlEoVNaiiY1cSr3m1L8GT608zFA6hRqkgAKHtAFNeUfrmlszUBskx
 ufO7tbRNg4POypiXSOabbFfvS+0=
 -----END CERTIFICATE-----
 EOF
+```
 
-# Apply the addition of the cert.  Should say "1 cert added"
+Apply the addition of the cert.  Should say "1 cert added"
+```
 update-ca-certificates
+```
 
-# Restart services.  This will restart all containers/pods.  Can take a while
+Restart services.  This will restart all containers/pods.  Can take a while
+```
 systemctl start docker
 systemctl start kubelet
+```
 
-# No longer run as root
+No longer run as root
+```
 exit
+```
 
 
-# Test local CA approves https server cert
+Test local CA approves https server cert
+```
 curl -v https://docker-repo.dev.atl.foundry.att.com:5000/v2/_catalog
+```
 
-# Test docker pull
+Test docker pull
+```
 docker pull docker-repo.dev.atl.foundry.att.com:5000/ubuntu:16.04
+```
 
