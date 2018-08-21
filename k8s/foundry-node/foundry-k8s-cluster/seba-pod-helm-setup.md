@@ -65,8 +65,8 @@ helm install -n onos-voltha onos -f ~/source/helm-charts/configs/onos-voltha.yam
 helm install -n onos-fabric onos -f ~/source/voltha/k8s/foundry-node/foundry-k8s-cluster/att-seba-fabric-values.yaml
 ```
 
-Give voltha a couple minutes to install. This step is needed because of a bug with etcd-operator.  Need to "upgrade" to get etcd-cluster pods
-verify with kubectl get pods
+Give voltha a couple minutes to install. This step is needed because of a bug with etcd-operator.  Need to "upgrade" to get etcd-cluster pods.
+verify with kubectl get pods that 3 etcd-cluster-000X are running.
 
 ```
 sleep 120
