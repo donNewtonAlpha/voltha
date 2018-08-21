@@ -17,8 +17,9 @@ sudo mkdir -p /var/lib/voltha-runtime/onos/config
 sudo chown -R $(id -u):$(id -g) /var/lib/voltha-runtime
 ```
 
-## Git clone ATT voltha.  Contains deployment yaml for specific pods and services.  Does NOT use helm.
+## Git clone ATT voltha.  
 
+Contains deployment yaml for specific pods and services.  And other goodies.
 Checkout repo, if not done already.
 ```
 mkdir -p ~/source
@@ -37,7 +38,9 @@ kubectl apply -f ingress/
 
 ## BASE COMPONENTS
 
-Non voltha specific software components.  
+This process will manually apply k8s yaml files to deploy the environment.  This does NOT use helm.
+
+Install non-voltha specific software components.  
 These files have been edited to reflect persistent environment
 ```
 kubectl apply -f foundry-node/zookeeper_persist.yml
@@ -135,12 +138,12 @@ kol() {
 }
 ```
 
-Purge clear etcd
-vcli access voltha cli
-onos access onos cli
-kgp get kubernetes pods
-kvl get vcore's log
-kol get onos' log
+purge clears etcd data and delete/re-applys pods.  Good for development cycle iteration.
+vcli alias accesses voltha cli. 
+onos alias accesses onos cli. 
+kgp gets kubernetes pods without all the typing.
+kvl get vcore's log.
+kol get onos' log.
 
 
 
