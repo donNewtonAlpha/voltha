@@ -10,18 +10,21 @@ reboot
 ```
 
 
-Get docker-ce
+Add docker-ce gpg key and repo
 ```
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
 sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
 ```
 
 
-Get k8s
+Add kubernetes gpg key and repo
 ```
 curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
 sudo add-apt-repository "deb http://apt.kubernetes.io/ kubernetes-xenial main"
+```
 
+Install docker-ce, kubelet, kubeadm and kubectl from the newly added repos.
+```
 sudo apt update
 sudo apt install docker-ce kubelet kubeadm kubectl -y
 
@@ -29,7 +32,7 @@ sudo systemctl stop docker
 sudo systemctl stop kubelet
 ```
 
-Install the AT&T Foundry Atlanta CA cert at the system level.
+Install the AT&T Foundry Atlanta CA cert at the system level.  The docker-repo hosted at the Foundry uses a cert signed by this CA.  Pulling images from that repo will require this.
 ```
 sudo bash -c 'cat > /usr/local/share/ca-certificates/att-foundry-atlanta-ca.crt' << EOF
 -----BEGIN CERTIFICATE-----
@@ -69,7 +72,7 @@ Apply the addition of the cert.  Should say "1 cert added"
 sudo update-ca-certificates
 ```
 
-Startup docker and kubelet
+Startup docker and kubelet.  Kubelet will say loaded and exit-loop.  This is ok because there is no kube system pods running yet.  There will be soon enough.
 ```
 sudo systemctl start docker
 sudo systemctl start kubelet
@@ -77,17 +80,15 @@ sudo systemctl enable docker
 sudo systemctl enable kubelet
 sudo systemctl status docker
 sudo systemctl status kubelet
-# loaded is ok for kubelet. it will exit-loop until a k8s cluster is setup
 ```
 
+Give a non-root user ability to manage docker
 ```
 sudo usermod -aG docker <non-root-user>
 ```
 
-Add the k8s resolver into the top of the hosts resolver search list
-The actual resolver will be installed below.  
-Also lower the timeout and attempts so the system default resolver is attempted quicker
-in the event the k8s resolver isnt responding.
+Add the k8s resolver into the top of the hosts resolver search list.  This is so kubectl svc names can be convienently resolved.  Dont get too used to this though as this setup will not be on the 3 server cluster. 
+The actual resolver will be installed below as part of kubernetes installation.  Also lower the timeout and attempts so the system default resolver is attempted quicker in the event the k8s resolver isnt responding.
 ```
 sudo sh -c 'echo "nameserver 10.96.0.10" >> /etc/resolvconf/resolv.conf.d/head'
 sudo sh -c 'echo "options ndots:5 timeout:1 attempts:1" >> /etc/resolvconf/resolv.conf.d/base'
@@ -102,7 +103,7 @@ Disable swap. kubelet nor kubeadm with run with it.
 sudo swapoff -a
 ```
 
-Run the init
+Run the kubeadm init.  Can take a while as kube system images have to be downloaded.  You should save the output if you need to refer to it later.
 ```
 sudo kubeadm init --pod-network-cidr=192.168.0.0/16
 ```
@@ -118,12 +119,12 @@ sudo chown $(id -u):$(id -g) $HOME/.kube/config
 
 ## Install CNI and Verify basics
 
+Verify kube system pods are up.  
 ```
 kubectl get all --all-namespaces
 ```
 
 Allow master node to run deployments
-
 ```
 kubectl taint nodes --all node-role.kubernetes.io/master-
 
@@ -148,6 +149,7 @@ kubectl apply -f foundry-node/foundry-k8s-cluster/calico-3.1.3-k8setcd.yaml
 
 ## Verify full k8s functionality
 
+Everything should eventually become 'Running'
 ```
 kubectl get pods --all-namespaces
 kubectl get all --all-namespaces

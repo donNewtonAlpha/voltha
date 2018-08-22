@@ -16,7 +16,7 @@ git clone https://gerrit.opencord.org/helm-charts
 
 ### Install helm
 
-Skip if you already have helm/tiller running
+Skip if you already have helm/tiller running.  
 ```
 wget https://storage.googleapis.com/kubernetes-helm/helm-v2.9.1-linux-amd64.tar.gz
 mkdir helm-unpack
@@ -57,7 +57,7 @@ helm dep update voltha
 helm install -n voltha voltha --set etcd-operator.customResources.createEtcdClusterCRD=false -f ~/source/voltha/k8s/foundry-node/foundry-k8s-cluster/att-seba-voltha-values.yaml
 ```
 
-Install onoses (onosi?).   Should refer to stock onos image.  Custom apps get loaded later.  
+Install onoses (onosi?).   Voltha onos should refer to stock onos image.  Custom apps get loaded later.  Fabric onos currently requires a custom build as there are features not yet pushed to the base image yet.  This should change soon enough.
 ```
 helm dep update onos
 helm install -n onos-voltha onos -f ~/source/helm-charts/configs/onos-voltha.yaml
@@ -65,13 +65,13 @@ helm install -n onos-fabric onos -f ~/source/voltha/k8s/foundry-node/foundry-k8s
 ```
 
 Give voltha a couple minutes to install. This step is needed because of a bug with etcd-operator.  Need to "upgrade" to get etcd-cluster pods.
-verify with kubectl get pods that 3 etcd-cluster-000X are running.
+Verify with kubectl get pods that 3 etcd-cluster-000X are running.
 ```
 sleep 120
 helm upgrade voltha voltha --set etcd-operator.customResources.createEtcdClusterCRD=true -f ~/source/voltha/k8s/foundry-node/foundry-k8s-cluster/att-seba-voltha-values.yaml
 ```
 
-Install att workflow xos-to-voltha and onos syncronizers.  business logic specific.  Load needed onos apps
+Install att workflow xos-to-voltha and onos syncronizers.  Business logic specific.  Load needed onos apps into voltha onos.
 ```
 helm dep update xos-profiles/att-workflow
 helm install -n att-workflow xos-profiles/att-workflow -f ~/source/voltha/k8s/foundry-node/foundry-k8s-cluster/att-seba-profile-values.yaml
@@ -82,14 +82,20 @@ sleep 120
 
 ## POD, OLT, and Subscriber Provisioning
 
-Below is where provisioning starts.  These are specific to the QA pod so change yaml files to match your environment.
+Below is where provisioning starts.  These are specific to the QA pod so change yaml files to match your environment.  Replace localip with whichever k8s host has the available NodePorts.   See kubectl get svc.
 ```
 cd ~/source/podconfigs/tosca/att-workflow
 
 localip=10.64.1.X
+```
 
+Load radius server config into onos voltha.  You may need to replace foundry-simple-netcfg.json with foundry-full-netcfg.json depending on if xos syncronizers can fully populate/query sadis.
+```
 ~/source/voltha/k8s/foundry-node/foundry-k8s-cluster/quick-onos-update.sh $localip foundry-simple-netcfg.json
+```
 
+Run the tosca model additions to create pod, olt line card, onu whitelist additions, and actual subscriber data.
+```
 curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --data-binary @foundry-pod-config.yaml http://${localip}:30007/run
 curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --data-binary @foundry-pod-olt.yaml http://${localip}:30007/run
 curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --data-binary @foundry-whitelist.yaml http://${localip}:30007/run
@@ -104,7 +110,7 @@ helm install -n kafkacat ~/source/helm-charts/xos-tools/kafkacat
 kubectl exec -ti kafkacat-86bf65f7f7-8w5m2 -- kafkacat -b cord-kafka -t authentication.events
 ```
 
-To delete everything
+To delete everything.  
 ```
 helm delete --purge att-workflow cord-kafka onos-fabric onos-voltha voltha xos-core
 ```
