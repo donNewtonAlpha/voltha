@@ -73,7 +73,7 @@ kubectl apply -f foundry-node/vcli_repo.yml
 kubectl apply -f foundry-node/netconf_repo.yml 
 ```
 
-Edit onos network config to reflect your OLT hardware.  Otherwise copy as-is
+Edit onos network config to reflect your OLT hardware.  Otherwise copy as-is.  Install onos needed to drive the voltha "switch"
 ```
 cp ~/source/voltha/onos-config/network-cfg.json /var/lib/voltha-runtime/onos/config/
 kubectl apply -f foundry-node/onos_repo.yml 
@@ -87,15 +87,13 @@ kubectl get pods -n voltha
 
 Check health, vcore is the big one
 ```
-kubectl get pods -n voltha   # get pod name of choice
+kubectl get pods -n voltha   # choose pod name to investigate
 kubectl describe pod <pod-name> -n voltha
 kubectl log <pod-name> -n voltha -f --tail=20
-kubectl exec -ti <pod-name> -n voltha -- /bin/sh
-#   exit shell back to host
 ```
 
 
-Get svc ip and connect cli
+Get service ip, either NodePort or ClusterIP, and connect to CLI services.
 ```
 kubectl get svc -n voltha  # note the vcli clusterIP, and the onos clusterIP
 
@@ -110,13 +108,12 @@ ssh -p 8101 karaf@<onos-cluster-IP>
 ## type logout to exit onos shell
 ```
 
-## VOLTHA CORE DONE 
+At this point voltha and its required pods are running.  Use the CLI or API to add your OLT "linecard".  We typically use EdgeCore OLT devices.
 
 
 ## USEFUL SCRIPTS AND ALIASES 
 
-Add this to your .bashrc file
-
+Add this to your .bashrc file for ease of system usage.
 ```
 alias purge='~/source/voltha/k8s/foundry-node/scripts/etcd-clean.sh purge'
 alias vcli='ssh -p 5022 -o StrictHostKeyChecking=no voltha@vcli.voltha.svc.cluster.local'
@@ -149,6 +146,7 @@ kol get onos' log.
 
 ## TO BUILD CONTAINERS 
 
+If need to modify code or build your own Docker image follow these steps.  
 ```
 sudo apt-get update
 sudo apt-get install build-essential virtualenv python-dev python-pip python libssl-dev libpcap-dev python-netifaces \
