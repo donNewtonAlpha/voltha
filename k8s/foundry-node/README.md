@@ -26,6 +26,6 @@ https://github.com/donNewtonAlpha/voltha/blob/master/k8s/foundry-node/foundry-k8
 
 ## Development and Debugging
 
-Run pycharm with remote debugging capabilities.   Build development image that allows stepping through code and breakpoints
+Run pycharm with remote debugging capabilities.   Build development image that allows stepping through code and breakpoints  
 https://github.com/donNewtonAlpha/voltha/blob/master/k8s/foundry-node/pycharm-voltha-debug.md
 
