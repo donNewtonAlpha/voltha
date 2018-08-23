@@ -187,16 +187,17 @@ class Main(object):
     @inlineCallbacks
     def startup_components(self):
         try:
-            self.log.info('starting-internal-components')
+            self.log.info('starting-internal-components-step1')
 
             iface_map = self.setup_networking_assets(self.args.name,
                                                      self.args.onus)
+            self.log.info('starting-internal-components-step2')
             self.io = yield RealIo(iface_map).start()
             self.ponsim = PonSim(self.args.onus, self.io.egress, self.alarm_config)
             self.io.register_ponsim(self.ponsim)
 
             self.x_pon_sim = XPonSim()
-
+            self.log.info('starting-internal-components-step4')
             self.grpc_server = GrpcServer(self.args.grpc_port,
                                           self.ponsim,
                                           self.x_pon_sim,
@@ -235,13 +236,20 @@ class Main(object):
         for portnum in [0] + range(128, 128 + n_unis):
             external_name = '%s_%d' % (prefix, portnum)
             internal_name = external_name + 'sim'
+            self.log.debug('adding bridge')
+            self.log.debug('sudo ip link add dev {} type veth peer name {}'.format(
+                external_name, internal_name
+            ))
             os.system('sudo ip link add dev {} type veth peer name {}'.format(
                 external_name, internal_name
             ))
+
             os.system('sudo ip link set {} up'.format(external_name))
             os.system('sudo ip link set {} up'.format(internal_name))
             if portnum == 0:
+                self.log.debug('bridge = sudo brctl addif ponmgmt {}'.format(external_name))
                 os.system('sudo brctl addif ponmgmt {}'.format(external_name))
+                self.log.debug('added external name = {}'.format(external_name))
             port_map[portnum] = internal_name
         return port_map
 

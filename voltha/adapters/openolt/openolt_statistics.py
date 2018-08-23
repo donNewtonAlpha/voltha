@@ -142,8 +142,7 @@ class OpenOltStatisticsMgr(object):
 
         prefix = 'voltha.openolt.{}'.format(self.device.device_id)
 
-        port_type_name = platform.intf_id_to_port_type_name(intf_id=port_stats.intf_id).lower()
-        foo = port_type_name
+
 
         # FIXME
         if port_stats.intf_id < 132:
@@ -179,9 +178,43 @@ class OpenOltStatisticsMgr(object):
         pm_config = self.pm_metrics.make_proto(pmconfigs)
         foo = True
         """
-        The following code is for testing the converion to the voltha/extensions/kpis
+        The following code is for testing the conversion to the voltha/extensions/kpis
         
         """
+
+        # 1 convert the incoming stats to one of the structures in the olt_metrics group.
+        try:
+            port_type_name = platform.intf_id_to_port_type_name(intf_id=port_stats.intf_id).lower()
+            if 'nni' in port_type_name:
+                # foo = self.extract_nni_metrics(port_stats)
+                foo = True
+            elif 'pon' in port_type_name:
+                # foo = self.extract_pon_metrics(port_stats)
+                foo = True
+            else:
+                foo = True
+        except Exception as extracterr:
+            foo = extracterr
+
+        foo = True
+
+    def extract_pon_metrics(self, stats):
+        rtrn_pon_metrics = dict()
+        for m in stats.metrics:
+            if m.port_name == "pon":
+                for p in m.packets:
+                    if self.pon_metrics_config[p.name].enabled:
+                        rtrn_pon_metrics[p.name] = p.value
+                return rtrn_pon_metrics
+
+    def extract_nni_metrics(self, stats):
+        rtrn_pon_metrics = dict()
+        for m in stats.metrics:
+            if m.port_name == "nni":
+                for p in m.packets:
+                    if self.pon_metrics_config[p.name].enabled:
+                        rtrn_pon_metrics[p.name] = p.value
+                return rtrn_pon_metrics
 
     def update_logical_port_stats(self, port_stats):
         # FIXME

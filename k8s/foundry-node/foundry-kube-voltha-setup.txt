@@ -68,6 +68,7 @@ sudo systemctl start docker
 sudo systemctl start kubelet
 sudo systemctl enable docker
 sudo systemctl enable kubelet
+
 sudo systemctl status docker
 sudo systemctl status kubelet
 # loaded is ok for kubelet. it will exit-loop until a k8s cluster is setup
@@ -76,7 +77,7 @@ sudo usermod -aG docker <non-root-user>
 
 ## Add the k8s resolver into the top of the hosts resolver search list
 ## the actual resolver will be installed below.  
-## Also lower the timeout and attempts so the system default resolver is attempted quicker
+## Also lower the timeout and attempts so the system defaureblt resolver is attempted quicker
 ## in the event the k8s resolver isnt responding
 sudo sh -c 'echo "nameserver 10.96.0.10" >> /etc/resolvconf/resolv.conf.d/head'
 sudo sh -c 'echo "options ndots:5 timeout:1 attempts:1" >> /etc/resolvconf/resolv.conf.d/base'

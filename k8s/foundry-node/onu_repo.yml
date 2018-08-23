@@ -19,7 +19,7 @@ metadata:
   name: onu
   namespace: voltha
 spec:
-   replicas: 4
+   replicas: 1
    template:
      metadata:
        labels:
