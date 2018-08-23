@@ -1,7 +1,7 @@
-# KUBERNETES 3 SERVER CLUSTER BUILD NOTES
+# Kubernetes 3 Server Cluster Build Notes
 
 
-Requires three hosts.  8 cpu, 16gb memory, 100GB disk.  
+Requires three hosts.  8 cpu, 16gb memory, 100GB disk.  Preferably SSD.
 Ubuntu 16.04 patched and updated and on the network, internet.  
 
 Note the IP and hostnames as will be used later in configs
@@ -116,7 +116,7 @@ systemctl restart docker
 
 
 
-## SINGLE HOST. Just from master0
+## Run frmo a SINGLE HOST. Just from master0
 
 
 ### Prepare k8s certs. 
@@ -189,7 +189,7 @@ scp pki-working/* foundry@master2:~/foundry-k8s-cluster/pki-working/
 
 
 
-## ALL 3 HOSTS.  master0, master1, and master2
+## Run from ALL 3 HOSTS.  master0, master1, and master2
 
 Create k8s pki dir and copy created certs on all 3 hosts
 ```
@@ -278,7 +278,7 @@ docker inspect <container-id>
 Check /var/log/syslog as kubelet will log there its attempts and running the static containers in /etc/kubernetes/manifests
 
 
-## SINGLE HOST. Just from master0
+## Run from a SINGLE HOST. Just from master0
 ### Proceed with final kubeadm steps
 
 Token creation, config upload into the cluster itself.  And the installation of dns and proxy containers.
@@ -324,7 +324,7 @@ kubectl apply -f calico-3.1.3-k8setcd.yaml
 
 
 
-## ALL 3 HOSTS.  master0, master1, and master2
+## Run from ALL 3 HOSTS.  master0, master1, and master2
 
 This was already done on master0, do on the other 2 masters so kubectl works on them if needed
 ```
@@ -345,7 +345,9 @@ kubectl run -i --tty network-utils --image=amouat/network-utils --restart=Never 
 
 
 
-## SINGLE HOST. Just from master0
+## Run from SINGLE HOST. Just from master0
+At this point most verifying, kubectl running, helm installing can occur from master0.  But the others could run it if the 
+correct files were put in place.
 
 ### Install tools 
 
