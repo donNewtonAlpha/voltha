@@ -98,12 +98,12 @@ sudo resolvconf -u
 
 ## Intialize base k8s environment
 
-Disable swap. kubelet nor kubeadm with run with it.
+Disable swap. kubelet nor kubeadm will run with it.
 ```
 sudo swapoff -a
 ```
 
-Run the kubeadm init.  Can take a while as kube system images have to be downloaded.  You should save the output if you need to refer to it later.
+Run the kubeadm init.  This starts the k8s core pods and sets the configuration.  Can take a while as kube system docker images have to be downloaded.  You should save the output if you need to refer to it later.
 ```
 sudo kubeadm init --pod-network-cidr=192.168.0.0/16
 ```
@@ -138,7 +138,7 @@ git clone https://github.com/donNewtonAlpha/voltha.git
 cd ~/source/voltha/k8s/
 ```
 
-Setup container networking.  Use prepped yaml from calico
+Setup container networking.  Use prepped/saved yaml from calico.  Alternatively you can pull these from calico's website https://docs.projectcalico.org/v3.1/getting-started/kubernetes/installation/calico
 ```
 kubectl apply -f foundry-node/foundry-k8s-cluster/calico-rbac-kdd.yaml
 kubectl apply -f foundry-node/foundry-k8s-cluster/calico-3.1.3-k8setcd.yaml 
