@@ -5,11 +5,12 @@ Requires three hosts.  8 cpu, 16gb memory, 100GB disk.  Preferably SSD.
 Ubuntu 16.04 patched and updated and on the network, internet.  
 
 Note the IP and hostnames as will be used later in configs
+
 Run all of this as root
 
 Each host is referred below by their new alias that will be added to /etc/hosts, 
 master0, master1, and master2.  Their existing hostnames will remain.  Note each of their IP 
-addresses and which will be assigned their respective master role.
+addresses and which will be assigned their respective master role.  Some sections below must be run from one host, typially master0.  Other sections run from all 3 hosts.
 
 
 
@@ -315,7 +316,7 @@ kubectl apply -f coredns-deployment-updated.yaml
 
 ### Install Container Networking.  
 
-We use calico.
+Setup container networking.  Use prepped/saved yaml from calico.  Alternatively you can pull these from calico's website https://docs.projectcalico.org/v3.1/getting-started/kubernetes/installation/calico
 ```
 kubectl apply -f calico-rbac-kdd.yaml
 kubectl apply -f calico-3.1.3-k8setcd.yaml
