@@ -406,6 +406,9 @@ class BrcmOpenomciOnuHandler(object):
                         self.log.error('unsupported-action-type',
                                   action_type=action.type, in_port=_in_port)
 
+                if _type is not None:
+                    continue
+
                 #
                 # All flows created from ONU adapter should be OMCI based
                 #
