@@ -230,7 +230,7 @@ class ConnectionManager(object):
             log.info('retrieve-device', device_id =device_id)
             try:
                 stub = voltha_pb2.VolthaLocalServiceStub(self.channel)
-                device = stub.ListDevices(ID(id=device_id))
+                device = stub.GetDevice(ID(id=device_id))
 
                 returnValue(device)
 
