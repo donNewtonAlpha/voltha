@@ -320,7 +320,8 @@ class ConnectionManager(object):
                     connected_devices = []
 
                     for logical_device in logical_devices:
-                        device = yield self.get_device_from_voltha()
+                        device = yield self.get_device_from_voltha(
+                            logical_device.root_device_id)
                         if device.connect_status != ConnectStatus.UNREACHABLE:
                             connected_devices.append(logical_device)
 
