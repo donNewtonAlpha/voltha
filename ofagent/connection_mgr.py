@@ -29,7 +29,7 @@ from grpc._channel import _Rendezvous
 from ofagent.protos import third_party
 from protos import voltha_pb2
 from protos.voltha_pb2 import OfAgentSubscriber
-from voltha.protos.common_pb2 import ConnectStatus
+from protos.common_pb2 import ConnectStatus
 from grpc_client import GrpcClient
 
 from agent import Agent
