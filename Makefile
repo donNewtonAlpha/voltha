@@ -248,7 +248,7 @@ voltha:
 endif
 
 voltha-prod:
-    docker build $(DOCKER_BUILD_ARGS) -t ${REGISTRY}${REPOSITORY}voltha-voltha_prod:${TAG} -f docker/Dockerfile.voltha_prod .
+	docker build $(DOCKER_BUILD_ARGS) -t ${REGISTRY}${REPOSITORY}voltha-voltha_prod:${TAG} -f docker/Dockerfile.voltha_prod .
 
 voltha-adapters:
 	make -C voltha/adapters/asfvolt16_olt
