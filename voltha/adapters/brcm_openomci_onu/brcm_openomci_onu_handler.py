@@ -406,6 +406,8 @@ class BrcmOpenomciOnuHandler(object):
                         self.log.error('unsupported-action-type',
                                   action_type=action.type, in_port=_in_port)
 
+                # TODO: fix that. It is meant to not act on the EAP flow
+
                 if _type is not None:
                     continue
 
