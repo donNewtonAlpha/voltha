@@ -29,6 +29,7 @@ from grpc._channel import _Rendezvous
 from ofagent.protos import third_party
 from protos import voltha_pb2
 from protos.voltha_pb2 import OfAgentSubscriber
+from voltha.protos.common_pb2 import ConnectStatus
 from grpc_client import GrpcClient
 
 from agent import Agent
@@ -291,8 +292,13 @@ class ConnectionManager(object):
                     # get current list from Voltha
                     devices = yield self.get_list_of_logical_devices_from_voltha()
 
+                    # Filtering out unreachable devices
+                    connected_devices = [d for d in devices if
+                                         d.connect_status !=
+                                         ConnectStatus.UNREACHABLE]
+
                     # update agent list and mapping tables as needed
-                    self.refresh_agent_connections(devices)
+                    self.refresh_agent_connections(connected_devices)
                 else:
                     log.info('vcore-communication-unavailable')
 
