@@ -1,6 +1,6 @@
 # Basic voltha install with helm
 
-Minimal setup without seba pods
+Minimal setup without seba pods.  Assumes a working k8s environment, single server or cluster.
 
 ## Install voltha and dependencies.  finally, why we are here
 
@@ -10,8 +10,6 @@ cd ~/
 mkdir -p source
 cd ~/source
 git clone https://github.com/donNewtonAlpha/voltha.git
-git clone https://bitbucket.org/onfcord/podconfigs.git
-git clone https://gerrit.opencord.org/seba
 git clone https://gerrit.opencord.org/helm-charts
 cd ~/
 

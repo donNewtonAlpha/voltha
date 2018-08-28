@@ -1,17 +1,22 @@
 # Full SEBA Pod Installation Notes
 
-Will run on a single k8s instance or a 3 server cluster.  See other notes on how to setup
+Will run on a single k8s instance or a 3 server cluster.  See other notes on how to setup.  These helm charts and docker images are under daily active development and can break as often with no notice.  Work is being done to create snapshots of stable instances.  These notes are subject to change until things stabilize.
 
 
 ## Clone needed repos
 
 We use a set of custom helm values yaml file for our deployments, kept in our voltha github clone
 ```
+cd ~/
+mkdir -p source
 cd ~/source
 git clone https://github.com/donNewtonAlpha/voltha.git
-git clone https://bitbucket.org/onfcord/podconfigs.git
-git clone https://gerrit.opencord.org/seba
 git clone https://gerrit.opencord.org/helm-charts
+git clone https://bitbucket.org/onfcord/podconfigs.git
+cd ~/
+
+# this may exists if you used previous notes
+ln -s ~/source/voltha/k8s/foundry-node/foundry-k8s-cluster
 ```
 
 ### Install helm
@@ -24,7 +29,7 @@ cd helm-unpack/
 tar -zxvf ../helm-v2.9.1-linux-amd64.tar.gz
 sudo cp linux-amd64/helm /usr/local/bin/
 
-cd ~/source/voltha/k8s/foundry-node/foundry-k8s-cluster
+cd ~/foundry-k8s-cluster
 kubectl apply -f helm-role.yaml
 helm init --service-account tiller
 export HELM_HOME=/home/foundry/.helm
@@ -54,27 +59,27 @@ helm install -n cord-kafka incubator/kafka --set replicas=1 --set persistence.en
 Install voltha.  Note the custom values.  There we define the docker images we want to run, and the kafka that we want voltha to share with xos and onos.
 ```
 helm dep update voltha
-helm install -n voltha voltha --set etcd-operator.customResources.createEtcdClusterCRD=false -f ~/source/voltha/k8s/foundry-node/foundry-k8s-cluster/att-seba-voltha-values.yaml
+helm install -n voltha voltha --set etcd-operator.customResources.createEtcdClusterCRD=false -f ~/foundry-k8s-cluster/att-seba-voltha-values.yaml
 ```
 
 Install onoses (onosi?).   Voltha onos should refer to stock onos image.  Custom apps get loaded later.  Fabric onos currently requires a custom build as there are features not yet pushed to the base image yet.  This should change soon enough.
 ```
 helm dep update onos
 helm install -n onos-voltha onos -f ~/source/helm-charts/configs/onos-voltha.yaml
-helm install -n onos-fabric onos -f ~/source/voltha/k8s/foundry-node/foundry-k8s-cluster/att-seba-fabric-values.yaml
+helm install -n onos-fabric onos -f ~/foundry-k8s-cluster/att-seba-fabric-values.yaml
 ```
 
-Give voltha a couple minutes to install. This step is needed because of a bug with etcd-operator.  Need to "upgrade" to get etcd-cluster pods.
+Give voltha a couple minutes to install. The upgrade step is needed because of a bug with etcd-operator.   Need to "upgrade" to get etcd-cluster pods.
 Verify with kubectl get pods that 3 etcd-cluster-000X are running.
 ```
 sleep 120
-helm upgrade voltha voltha --set etcd-operator.customResources.createEtcdClusterCRD=true -f ~/source/voltha/k8s/foundry-node/foundry-k8s-cluster/att-seba-voltha-values.yaml
+helm upgrade voltha voltha --set etcd-operator.customResources.createEtcdClusterCRD=true -f ~/foundry-k8s-cluster/att-seba-voltha-values.yaml
 ```
 
 Install att workflow xos-to-voltha and onos syncronizers.  Business logic specific.  Load needed onos apps into voltha onos.
 ```
 helm dep update xos-profiles/att-workflow
-helm install -n att-workflow xos-profiles/att-workflow -f ~/source/voltha/k8s/foundry-node/foundry-k8s-cluster/att-seba-profile-values.yaml
+helm install -n att-workflow xos-profiles/att-workflow -f ~/foundry-k8s-cluster/att-seba-profile-values.yaml
 # give the workflow pods time to populate models, load apps, etc.
 sleep 120
 ```
@@ -82,7 +87,7 @@ sleep 120
 
 ## POD, OLT, and Subscriber Provisioning
 
-Below is where provisioning starts.  These are specific to the QA pod so change yaml files to match your environment.  Replace localip with whichever k8s host has the available NodePorts.   See kubectl get svc.
+Below is where provisioning starts.  These are specific to the QA pod so change yaml files to match your environment.  Replace localip with whichever k8s host has the available NodePorts.   See kubectl get svc.  These TOSCA files being curl'ed into the pod represent the provisioning steps needed to build a pod, add an olt, add an onu, and then add a subscriber.   These ultimately would be called upon by an OSS system, using either gRPC or RESTful calls.  But for now we use curl to get things going. 
 ```
 cd ~/source/podconfigs/tosca/att-workflow
 
@@ -91,7 +96,7 @@ localip=10.64.1.X
 
 Load radius server config into onos voltha.  You may need to replace foundry-simple-netcfg.json with foundry-full-netcfg.json depending on if xos syncronizers can fully populate/query sadis.
 ```
-~/source/voltha/k8s/foundry-node/foundry-k8s-cluster/quick-onos-update.sh $localip foundry-simple-netcfg.json
+~/foundry-k8s-cluster/quick-onos-update.sh $localip foundry-simple-netcfg.json
 ```
 
 Run the tosca model additions to create pod, olt line card, onu whitelist additions, and actual subscriber data.
