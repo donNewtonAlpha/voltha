@@ -364,7 +364,6 @@ Verify etcd health. Lots of output is good
 ```
 export ETCDCTL_API=3
 etcdctl --endpoints http://127.0.0.1:2379 get /registry --prefix -w fields
-etcdctl --endpoints http://127.0.0.1:2379 get /calico --prefix -w fields
 ```
 
 Verify calico bgp peering
@@ -392,6 +391,9 @@ helm init --service-account tiller
 export HELM_HOME=/home/foundry/.helm
 helm repo add incubator https://kubernetes-charts-incubator.storage.googleapis.com/
 helm update
+
+# Reset non-root user permissions back properly
+chown -R foundry:foundry /home/foundry
 ```
 
 Verify helm/tiller is running
