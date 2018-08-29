@@ -62,11 +62,10 @@ helm dep update voltha
 helm install -n voltha voltha --set etcd-operator.customResources.createEtcdClusterCRD=false -f ~/foundry-k8s-cluster/att-seba-voltha-values.yaml
 ```
 
-Install onoses (onosi?).   Voltha onos should refer to stock onos image.  Custom apps get loaded later.  Fabric onos currently requires a custom build as there are features not yet pushed to the base image yet.  This should change soon enough.
+Install onos
 ```
 helm dep update onos
-helm install -n onos-voltha onos -f ~/source/helm-charts/configs/onos-voltha.yaml
-helm install -n onos-fabric onos -f ~/foundry-k8s-cluster/att-seba-fabric-values.yaml
+helm install -n onos onos -f ~/source/helm-charts/configs/onos.yaml
 ```
 
 Give voltha a couple minutes to install. The upgrade step is needed because of a bug with etcd-operator.   Need to "upgrade" to get etcd-cluster pods.
@@ -79,7 +78,7 @@ helm upgrade voltha voltha --set etcd-operator.customResources.createEtcdCluster
 Install att workflow xos-to-voltha and onos syncronizers.  Business logic specific.  Load needed onos apps into voltha onos.
 ```
 helm dep update xos-profiles/att-workflow
-helm install -n att-workflow xos-profiles/att-workflow -f ~/foundry-k8s-cluster/att-seba-profile-values.yaml
+helm install -n att-workflow xos-profiles/att-workflow
 # give the workflow pods time to populate models, load apps, etc.
 sleep 120
 ```
