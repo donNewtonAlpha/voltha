@@ -156,6 +156,10 @@ class OltPmMetricsAlt(AdapterPmMetricsAlt):
                 for group in pm_config.groups:
                     group_config = self.pm_group_metrics.get(group.group_name)
                     if group_config is not None:
+                        metrics = group_config.metrics
+                        for m in metrics:
+                            foo = m.name
+                            foo = True
                         group_config.enabled = group.enabled
                     foo = True
             else:
@@ -165,6 +169,7 @@ class OltPmMetricsAlt(AdapterPmMetricsAlt):
                     self.onu_metrics_config[m.name].enabled = m.enabled
                     self.gem_metrics_config[m.name].enabled = m.enabled
                     foo = True
+            foo = pm_config
 
         except Exception as e:
             self.log.exception('update-failure', e=e)
@@ -219,16 +224,46 @@ class OltPmMetricsAlt(AdapterPmMetricsAlt):
                 pm_gem_stats = pm_config if have_pon else None
 
             if have_nni:
+                """
+                The following must be added when grouping is 
+                False.   Otherwise this will fail.
+                """
+                pm_ether_stats = PmGroupConfig(group_name='Ethernet',
+                                               group_freq=self.default_freq,
+                                               enabled=True)
+                self.pm_group_metrics[pm_ether_stats.group_name] = pm_ether_stats
                 for m in sorted(self.nni_metrics_config):
                     pm = self.nni_metrics_config[m]
                     if not self.grouped:
                         if pm.name in metrics:
                             continue
                         metrics.add(pm.name)
-                    pm_ether_stats.metrics.extend([PmConfig(name=pm.name,
-                                                            type=pm.type,
-                                                            enabled=pm.enabled)])
+                    try:
+                        pm_ether_stats.metrics.extend([PmConfig(name=pm.name,
+                                                                type=pm.type,
+                                                                enabled=pm.enabled)])
+                    except Exception as err:
+                        foo = err.message
             if have_pon:
+                """
+                The following must be added when grouping is 
+                False.   Otherwise this will fail.
+                """
+                pm_pon_stats = PmGroupConfig(group_name='PON',
+                                             group_freq=self.default_freq,
+                                             enabled=True)
+
+                pm_onu_stats = PmGroupConfig(group_name='ONU',
+                                             group_freq=self.default_freq,
+                                             enabled=True)
+
+                pm_gem_stats = PmGroupConfig(group_name='GEM',
+                                             group_freq=self.default_freq,
+                                             enabled=True)
+
+                self.pm_group_metrics[pm_pon_stats.group_name] = pm_pon_stats
+                self.pm_group_metrics[pm_onu_stats.group_name] = pm_onu_stats
+                self.pm_group_metrics[pm_gem_stats.group_name] = pm_gem_stats
                 for m in sorted(self.pon_metrics_config):
                     pm = self.pon_metrics_config[m]
                     if not self.grouped:
@@ -285,27 +320,29 @@ class OltPmMetricsAlt(AdapterPmMetricsAlt):
                     metrics[name] = self.collect_group_metrics(port,
                                                                self.pon_pm_names,
                                                                self.pon_metrics_config)
-                for onu_id in port.onu_ids:
-                    onu = port.onu(onu_id)
-                    if onu is not None:
-                        if self.pm_group_metrics['ONU'].enabled:
-                            name = 'pon.{}.onu.{}'.format(port.port_no, onu.onu_id)
-                            metrics[name] = self.collect_group_metrics(onu,
-                                                                       self.onu_pm_names,
-                                                                       self.onu_metrics_config)
-                        if self.pm_group_metrics['GEM'].enabled:
-                            for gem in onu.gem_ports:
-                                if not gem.multicast:
-                                    name = 'pon.{}.onu.{}.gem.{}'.format(port.port_no,
-                                                                         onu.onu_id,
-                                                                         gem.gem_id)
-                                    metrics[name] = self.collect_group_metrics(onu,
-                                                                               self.gem_pm_names,
-                                                                               self.gem_metrics_config)
-                                # TODO: Do any multicast GEM PORT metrics here...
+                if hasattr(port,"onu_ids"):
+                    for onu_id in port.onu_ids:
+                        onu = port.onu(onu_id)
+                        if onu is not None:
+                            if self.pm_group_metrics['ONU'].enabled:
+                                name = 'pon.{}.onu.{}'.format(port.port_no, onu.onu_id)
+                                metrics[name] = self.collect_group_metrics(onu,
+                                                                           self.onu_pm_names,
+                                                                           self.onu_metrics_config)
+                            if self.pm_group_metrics['GEM'].enabled:
+                                for gem in onu.gem_ports:
+                                    if not gem.multicast:
+                                        name = 'pon.{}.onu.{}.gem.{}'.format(port.port_no,
+                                                                             onu.onu_id,
+                                                                             gem.gem_id)
+                                        metrics[name] = self.collect_group_metrics(onu,
+                                                                                   self.gem_pm_names,
+                                                                                   self.gem_metrics_config)
+                                    # TODO: Do any multicast GEM PORT metrics here...
             return metrics
         except Exception as err:
             foo = err.message
+            self.log.exception("Caught error: ", exception=err)
             raise Exception(err)
 
 

@@ -16,24 +16,15 @@ import structlog
 from twisted.internet.task import LoopingCall
 
 
-class AdapterPmMetricsAlt(object):
+class AdapterPmMetrics(object):
     """
-
-    Note:  This is identical to the AdapterPmMetrics EXCEPT it allows for the adapter_agent to  == NONE
-    for testing purposes
-
-
     Base class for Device Adapter PM Metrics Manager
 
     Device specific (OLT, ONU, OpenOMCI, ...) will derive groups of PM information
     and this base class is primarily used to provide a consistent interface to configure,
     start, and stop statistics collection.
-
-    Modified to allow for standalone testing by checking for adapter_agent = None.
-    Currently the adapter agent is used only to post to the publisher.   If the agent is
-    None then the messages are logged/
     """
-    def __init__(self, device_id, adapter_agent=None,
+    def __init__(self, adapter_agent, device_id,
                  grouped=False, freq_override=False, **kwargs):
         """
         Initializer for shared Device Adapter PM metrics manager
@@ -100,32 +91,13 @@ class AdapterPmMetricsAlt(object):
 
         :return: (dict) collected metrics
         """
+        metrics = dict()
 
-        try:
-            metrics = dict()
+        for (metric, t) in names:
+            if config[metric].enabled and hasattr(group, metric):
+                metrics[metric] = getattr(group, metric)
 
-            mval = []
-            tval = []
-            for (metric, t) in names:
-                mval.append(metric)
-                tval.append(t)
-
-
-                try:
-                    x = config
-                    foo = config[metric].enabled
-                except Exception as errInner:
-                    pass
-
-
-            for (metric, t) in names:
-                if config[metric].enabled and hasattr(group, metric):
-                    metrics[metric] = getattr(group, metric)
-
-            print("Metrics = {}".format(metrics))
-            return metrics
-        except Exception as err:
-            raise Exception(err)
+        return metrics
 
     def collect_metrics(self, metrics=None):
         """
@@ -153,7 +125,6 @@ class AdapterPmMetricsAlt(object):
         """ Request collection of all enabled metrics and publish them """
         try:
             metrics = self.collect_metrics()
-            # print(metrics)
             self.publish_metrics(metrics)
 
         except Exception as e:
@@ -173,68 +144,6 @@ class AdapterPmMetricsAlt(object):
 
             try:
                 ts = arrow.utcnow().timestamp
-                try:
-                    for k in metrics.keys():
-                        val = metrics[k]
-                        foo = True
-                except Exception as dErr:
-                    foo = dErr.message
-
-                foo = True
-
-                # Transform the metric to have no type annotations
-                # try:
-                #     for k in metrics.keys():
-                #         ilist = []
-                #         val = metrics[k]
-                #         ilist.append(val)
-                #         metrics[k] = tuple(ilist)
-                #         foo = True
-                # except Exception as dErr:
-                #     foo = dErr.message
-
-                foo = metrics
-
-                try:
-                    prefixes = {
-                        self.prefix + '.{}'.format(k): MetricValuePairs(metrics=metrics[k])
-                        for k in metrics.keys()}
-                    foo = True
-                except Exception as dErr:
-                    foo = dErr.message
-
-                for k in metrics.keys():
-                    val = metrics[k]
-                    print("key={}   value={}".format(k, val))
-                    if isinstance(val,dict):
-                        for k, v in val.items():
-                            if val[k] == 0 and isinstance(val[k],long):
-                                val[k] = 0.0
-                            if val[k] == 536870912:
-                                foo = True
-
-                            print("key={}   value={}".format(k,v))
-
-
-                try:
-                    valset = {"ValuePairs".format(k): MetricValuePairs(metrics=metrics[k])
-                            for k in metrics.keys()}
-                except Exception as err:
-                    foo = err.message
-                    foo = err.message
-                    valset = err.message
-
-                print(valset)
-                foo = True
-                for k in metrics.keys():
-                    val = metrics[k]
-                    print("key={}   value={}".format(k, val))
-                    if isinstance(val,dict):
-                        for k, v in val.items():
-                            val1 = val[k]
-                            print("key={}   value={}".format(k,v))
-
-
                 kpi_event = KpiEvent(
                     type=KpiEventType.slice,
                     ts=ts,
@@ -248,6 +157,7 @@ class AdapterPmMetricsAlt(object):
                     self.log.info("Adapter is NONE. Just logging the KPI. ")
                     self.log.info("KPIs", kpi_event=kpi_event)
                     foo = True
+
 
             except Exception as e:
                 self.log.exception('failed-to-submit-kpis', e=e)
