@@ -66,7 +66,7 @@ class BroadcomOnuAdapter(object):
     supported_device_types = [
         DeviceType(
             id=name,
-            vendor_ids=['BRCM', 'TWSH', 'ALPH', 'ISKT'],
+            vendor_ids=['NONE'],
             adapter=name,
             accepts_bulk_flow_update=True
         )
@@ -645,6 +645,9 @@ class BroadcomOnuHandler(object):
                     else:
                         self.log.error('unsupported-action-type',
                                   action_type=action.type, in_port=_in_port)
+
+                if _type is not None:
+                    continue
 
                 #
                 # All flows created from ONU adapter should be OMCI based
@@ -1819,4 +1822,3 @@ class BroadcomOnuHandler(object):
         for port in ports:
             port_id = 'uni-{}'.format(port.port_no)
             self.update_logical_port(logical_device_id, port_id, OFPPS_LIVE)
-

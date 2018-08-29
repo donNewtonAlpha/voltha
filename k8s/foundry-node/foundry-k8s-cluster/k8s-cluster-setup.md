@@ -1,20 +1,21 @@
-# KUBERNETES 3 SERVER CLUSTER BUILD NOTES
+# Kubernetes 3 Server Cluster Build Notes
 
 
-Requires three hosts.  8 cpu, 16gb memory, 100GB disk.  
+Requires three hosts.  8 cpu, 16gb memory, 100GB disk.  Preferably SSD.
 Ubuntu 16.04 patched and updated and on the network, internet.  
 
 Note the IP and hostnames as will be used later in configs
+
 Run all of this as root
 
 Each host is referred below by their new alias that will be added to /etc/hosts, 
 master0, master1, and master2.  Their existing hostnames will remain.  Note each of their IP 
-addresses and which will be assigned their respective master role.
+addresses and which will be assigned their respective master role.  Some sections below must be run from one host, typially master0.  Other sections run from all 3 hosts.
 
 
 
 
-## ALL 3 HOSTS.  master0, master1, and master2
+## Run this section on ALL 3 HOSTS.  master0, master1, and master2
 
 ### Repo/package prep
 
@@ -116,7 +117,7 @@ systemctl restart docker
 
 
 
-## SINGLE HOST. Just from master0
+## Run this section on a SINGLE HOST. Just from master0
 
 
 ### Prepare k8s certs. 
@@ -189,7 +190,7 @@ scp pki-working/* foundry@master2:~/foundry-k8s-cluster/pki-working/
 
 
 
-## ALL 3 HOSTS.  master0, master1, and master2
+## Run this section on ALL 3 HOSTS.  master0, master1, and master2
 
 Create k8s pki dir and copy created certs on all 3 hosts
 ```
@@ -278,7 +279,7 @@ docker inspect <container-id>
 Check /var/log/syslog as kubelet will log there its attempts and running the static containers in /etc/kubernetes/manifests
 
 
-## SINGLE HOST. Just from master0
+## Run this section on a SINGLE HOST. Just from master0
 ### Proceed with final kubeadm steps
 
 Token creation, config upload into the cluster itself.  And the installation of dns and proxy containers.
@@ -315,7 +316,7 @@ kubectl apply -f coredns-deployment-updated.yaml
 
 ### Install Container Networking.  
 
-We use calico.
+Setup container networking.  Use prepped/saved yaml from calico.  Alternatively you can pull these from calico's website https://docs.projectcalico.org/v3.1/getting-started/kubernetes/installation/calico
 ```
 kubectl apply -f calico-rbac-kdd.yaml
 kubectl apply -f calico-3.1.3-k8setcd.yaml
@@ -324,7 +325,7 @@ kubectl apply -f calico-3.1.3-k8setcd.yaml
 
 
 
-## ALL 3 HOSTS.  master0, master1, and master2
+## Run this section on ALL 3 HOSTS.  master0, master1, and master2
 
 This was already done on master0, do on the other 2 masters so kubectl works on them if needed
 ```
@@ -345,7 +346,9 @@ kubectl run -i --tty network-utils --image=amouat/network-utils --restart=Never 
 
 
 
-## SINGLE HOST. Just from master0
+## Run this section on a SINGLE HOST. Just from master0
+At this point most verifying, kubectl running, helm installing can occur from master0.  But the others could run it if the 
+correct files were put in place.
 
 ### Install tools 
 
@@ -361,7 +364,6 @@ Verify etcd health. Lots of output is good
 ```
 export ETCDCTL_API=3
 etcdctl --endpoints http://127.0.0.1:2379 get /registry --prefix -w fields
-etcdctl --endpoints http://127.0.0.1:2379 get /calico --prefix -w fields
 ```
 
 Verify calico bgp peering
@@ -389,6 +391,9 @@ helm init --service-account tiller
 export HELM_HOME=/home/foundry/.helm
 helm repo add incubator https://kubernetes-charts-incubator.storage.googleapis.com/
 helm update
+
+# Reset non-root user permissions back properly
+chown -R foundry:foundry /home/foundry
 ```
 
 Verify helm/tiller is running

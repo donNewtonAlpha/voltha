@@ -21,6 +21,7 @@ import sys
 from uuid import uuid4
 
 import arrow
+import voltha.core.flow_decomposer as fd
 import grpc
 import json
 import structlog
@@ -36,6 +37,7 @@ from twisted.internet.task import LoopingCall
 from voltha.adapters.iadapter import OltAdapter
 from voltha.core.logical_device_agent import mac_str_to_tuple
 from voltha.protos import third_party
+from voltha.protos import openflow_13_pb2 as ofp
 from voltha.protos import ponsim_pb2
 from voltha.protos.common_pb2 import OperStatus, ConnectStatus, AdminState
 from voltha.protos.device_pb2 import Port, Device, PmConfig, PmConfigs
@@ -425,7 +427,7 @@ class PonSimOltHandler(object):
         self.alarms = AdapterAlarms(self.adapter, device)
 
         nni_port = Port(
-            port_no=2,
+            port_no=info.nni_port,
             label='NNI facing Ethernet port',
             type=Port.ETHERNET_NNI,
             admin_state=AdminState.ENABLED,
@@ -448,7 +450,7 @@ class PonSimOltHandler(object):
                 hw_desc='simualted pon',
                 sw_desc='simualted pon',
                 # serial_num=uuid4().hex,
-                serial_num="9b7cfd85441b407c87ee3261df7d4818",
+                serial_num=device.serial_number,
                 dp_desc='n/a'
             ),
             switch_features=ofp_switch_features(
@@ -638,9 +640,34 @@ class PonSimOltHandler(object):
                       frame_len=len(frame))
         self._rcv_frame(frame)
 
+    # VOLTHA's flow decomposition removes the information about which flows
+    # are trap flows where traffic should be forwarded to the controller.
+    # We'll go through the flows and change the output port of flows that we
+    # know to be trap flows to the OF CONTROLLER port.
     def update_flow_table(self, flows):
         stub = ponsim_pb2.PonSimStub(self.get_channel())
         self.log.info('pushing-olt-flow-table')
+        for flow in flows:
+            classifier_info = {}
+            for field in fd.get_ofb_fields(flow):
+                if field.type == fd.ETH_TYPE:
+                    classifier_info['eth_type'] = field.eth_type
+                    self.log.debug('field-type-eth-type',
+                                eth_type=classifier_info['eth_type'])
+                elif field.type == fd.IP_PROTO:
+                    classifier_info['ip_proto'] = field.ip_proto
+                    self.log.debug('field-type-ip-proto',
+                                ip_proto=classifier_info['ip_proto'])
+            if ('ip_proto' in classifier_info and (
+                classifier_info['ip_proto'] == 17 or
+                classifier_info['ip_proto'] == 2)) or (
+                      'eth_type' in classifier_info and
+                      classifier_info['eth_type'] == 0x888e):
+                for action in fd.get_actions(flow):
+                    if action.type == ofp.OFPAT_OUTPUT:
+                        action.output.port = ofp.OFPP_CONTROLLER
+            self.log.info('out_port', out_port=fd.get_out_port(flow))
+
         stub.UpdateFlowTable(FlowTable(
             port=0,
             flows=flows
@@ -676,17 +703,22 @@ class PonSimOltHandler(object):
         self.log.info('sending-packet-out', egress_port=egress_port,
                       msg=hexify(msg))
         pkt = Ether(msg)
-        out_pkt = (
-                Ether(src=pkt.src, dst=pkt.dst) /
-                Dot1Q(vlan=4000) /
-                Dot1Q(vlan=egress_port, type=pkt.type) /
-                pkt.payload
-        )
+        out_pkt = pkt
+        if egress_port != self.nni_port.port_no:
+            # don't do the vlan manipulation for the NNI port, vlans are already correct
+            out_pkt = (
+                    Ether(src=pkt.src, dst=pkt.dst) /
+                    Dot1Q(vlan=egress_port, type=pkt.type) /
+                    pkt.payload
+            )
+
+        # TODO need better way of mapping logical ports to PON ports
+        out_port = self.nni_port.port_no if egress_port == self.nni_port.port_no else 1
 
         if self.ponsim_comm == 'grpc':
             # send over grpc stream
             stub = ponsim_pb2.PonSimStub(self.get_channel())
-            frame = PonSimFrame(id=self.device_id, payload=str(out_pkt))
+            frame = PonSimFrame(id=self.device_id, payload=str(out_pkt), out_port=out_port)
             stub.SendFrame(frame)
         else:
             # send over frameio
