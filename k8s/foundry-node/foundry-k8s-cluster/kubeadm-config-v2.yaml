@@ -22,7 +22,7 @@ etcd:
     - http://master1:2379
     - http://master2:2379
 networking:
-  podSubnet: 192.168.0.0/16
+  podSubnet: 192.168.224.0/19
   serviceSubnet: 10.96.0.0/12
 bootstrapTokens:
 - groups:

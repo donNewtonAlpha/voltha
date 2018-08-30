@@ -105,7 +105,7 @@ sudo swapoff -a
 
 Run the kubeadm init.  This starts the k8s core pods and sets the configuration.  Can take a while as kube system docker images have to be downloaded.  You should save the output if you need to refer to it later.
 ```
-sudo kubeadm init --pod-network-cidr=192.168.0.0/16
+sudo kubeadm init --pod-network-cidr=192.168.224.0/19
 ```
 
 
