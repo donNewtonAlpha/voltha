@@ -159,11 +159,7 @@ class OpenOltStatisticsMgr(object):
                 pm_data["rx_crc_errors"] = port_stats.rx_crc_errors
                 pm_data["bip_errors"] = port_stats.bip_errors
 
-
                 pm_data["intf_id"] = intf_id
-
-
-                prefix = 'voltha.openolt.{}'.format(self.device.device_id)
 
                 """
                    Based upon the intf_id map to an nni port or a pon port
@@ -177,30 +173,13 @@ class OpenOltStatisticsMgr(object):
                 """
                 #
                 # FIXME
-                prefixes = {}
                 # Currently filter only 128 since the deployment will only be using port 0 / intf_id 128
                 if intf_id == 128:
                     self.update_port_object_kpi_data(
                         port_object=self.northbound_ports[port_stats.intf_id], datadict=pm_data)
-                    #
-                    # foo = True
-                    #
-                    # port_no = intf_id - 128
-                    # prefixes = {
-                    #     prefix + '.nni.{}.'.format(port_no): MetricValuePairs(
-                    #         metrics=pm_data)
-                    # }
-                    # foo = True
-
                 else:
                     self.update_port_object_kpi_data(
                         port_object=self.southbound_ports[port_stats.intf_id],datadict=pm_data)
-                    # port_no = intf_id & 0xF
-                    # prefixes = {
-                    #     prefix + '.pon.{}'.format(port_no): MetricValuePairs(
-                    #         metrics=pm_data)
-                    # }
-
         except Exception as err:
             self.log.exception("Error publishing kpi statistics. ", errmessage=err)
 
