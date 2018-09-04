@@ -123,13 +123,15 @@ class AdapterPmMetrics(object):
         if len(metrics) == 0:
             return None
 
-        return MetricInformation(metadata=MetricMetaData(title=group_name,
+        metric_info =  MetricInformation(metadata=MetricMetaData(title=group_name,
                                                          ts=now,
                                                          logical_device_id=self.logical_device_id,
                                                          serial_no=self.serial_number,
                                                          device_id=self.device_id,
                                                          context=context),
                                  metrics=metrics)
+        self.log.info("metric info.", metric_information=metric_info)
+        return metric_info
 
     def collect_metrics(self, data=None):
         """

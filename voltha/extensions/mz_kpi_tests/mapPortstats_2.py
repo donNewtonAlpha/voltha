@@ -228,7 +228,7 @@ def get_openolt_port_pm_names():
         ('admin_state', PmConfig.STATE),
         ('oper_status', PmConfig.STATE),
         ('intf_id',  PmConfig.STATE),
-        ('port_no', PmConfig.GUAGE),
+        ('port_no', PmConfig.GAUGE),
         ('rx_bytes', PmConfig.COUNTER),
         ('rx_packets', PmConfig.COUNTER),
         ('rx_ucast_packets', PmConfig.COUNTER),
@@ -246,28 +246,28 @@ def get_openolt_port_pm_names():
     pon_pm_names_orig = {
         ('admin_state', PmConfig.STATE),
         ('oper_status', PmConfig.STATE),
-        ('port_no', PmConfig.GUAGE),  # Physical device port number
-        ('pon_id', PmConfig.GUAGE),
+        ('port_no', PmConfig.GAUGE),  # Physical device port number
+        ('pon_id', PmConfig.GAUGE),
         ('rx_packets', PmConfig.COUNTER),
         ('rx_bytes', PmConfig.COUNTER),
         ('tx_packets', PmConfig.COUNTER),
         ('tx_bytes', PmConfig.COUNTER),
         ('tx_bip_errors', PmConfig.COUNTER),
-        ('in_service_onus', PmConfig.GUAGE),
-        ('closest_onu_distance', PmConfig.GUAGE)
+        ('in_service_onus', PmConfig.GAUGE),
+        ('closest_onu_distance', PmConfig.GAUGE)
     }
     onu_pm_names = {
-        ('pon_id', PmConfig.GUAGE),
-        ('onu_id', PmConfig.GUAGE),
-        ('fiber_length', PmConfig.GUAGE),
-        ('equalization_delay', PmConfig.GUAGE),
-        ('rssi', PmConfig.GUAGE),  #
+        ('pon_id', PmConfig.GAUGE),
+        ('onu_id', PmConfig.GAUGE),
+        ('fiber_length', PmConfig.GAUGE),
+        ('equalization_delay', PmConfig.GAUGE),
+        ('rssi', PmConfig.GAUGE),  #
     }
     gem_pm_names = {
-        ('pon_id', PmConfig.GUAGE),
-        ('onu_id', PmConfig.GUAGE),
-        ('gem_id', PmConfig.GUAGE),
-        ('alloc_id', PmConfig.GUAGE),
+        ('pon_id', PmConfig.GAUGE),
+        ('onu_id', PmConfig.GAUGE),
+        ('gem_id', PmConfig.GAUGE),
+        ('alloc_id', PmConfig.GAUGE),
         ('rx_packets', PmConfig.COUNTER),
         ('rx_bytes', PmConfig.COUNTER),
         ('tx_packets', PmConfig.COUNTER),

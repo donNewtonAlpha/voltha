@@ -2,8 +2,9 @@
 import yaml
 import sys,os, json, random
 from twisted.internet import reactor, defer
-from twisted.internet.defer import inlineCallbacks, returnValue
+from twisted.internet.defer import inlineCallbacks, returnValue, Deferred
 from twisted.python.failure import Failure
+from twisted.internet.task import LoopingCall
 
 from voltha.protos.third_party.google.api import annotations_pb2
 from voltha.protos.device_pb2 import PmConfig, PmConfigs, PmGroupConfig
@@ -34,7 +35,8 @@ This will test the open_olt statistics module directly
 
 """
 
-
+loopTimes = 4
+_loopCounter = 0
 
 def load_config():
     path = os.getcwd()
@@ -47,20 +49,7 @@ def load_config():
 
 
 def get_port_stats(intf_id, value=0):
-    # pm_data["rx_bytes"] = port_stats.rx_bytes
-    # pm_data["rx_packets"] = port_stats.rx_packets
-    # pm_data["rx_ucast_packets"] = port_stats.rx_ucast_packets
-    # pm_data["rx_mcast_packets"] = port_stats.rx_mcast_packets
-    # pm_data["rx_bcast_packets"] = port_stats.rx_bcast_packets
-    # pm_data["rx_error_packets"] = port_stats.rx_error_packets
-    # pm_data["tx_bytes"] = port_stats.tx_bytes
-    # pm_data["tx_packets"] = port_stats.tx_packets
-    # pm_data["tx_ucast_packets"] = port_stats.tx_ucast_packets
-    # pm_data["tx_mcast_packets"] = port_stats.tx_mcast_packets
-    # pm_data["tx_bcast_packets"] = port_stats.tx_bcast_packets
-    # pm_data["tx_error_packets"] = port_stats.tx_error_packets
-    # pm_data["rx_crc_errors"] = port_stats.rx_crc_errors
-    # pm_data["bip_errors"] = port_stats.bip_errors
+
     port_stats = PortStatistics(
         rx_bytes=1234 + value,
         rx_packets=value,
@@ -80,6 +69,78 @@ def get_port_stats(intf_id, value=0):
     )
     return port_stats
 
+@inlineCallbacks
+def start_reactor(log):
+        from twisted.internet import reactor
+        reactor.callWhenRunning(
+            lambda: log.info('twisted-reactor-started'))
+
+        reactor.run()
+        yield "done"
+
+def ind_dataloop(stat_mgr):
+
+    ethcount = 0
+    for i in range(0, 1):
+        port_stats = get_port_stats(intf_id=i + 128, value=random.randint(100, 1000))
+        stat_mgr.port_statistics_indication(port_stats)
+        ethcount += 1
+
+    # build the pon port sets
+    poncount = 0
+    for i in range(0, 16):
+        intf_id = 0x2 << 28 | i
+        port_stats = get_port_stats(intf_id=intf_id, value=random.randint(100, 1000))
+        stat_mgr.port_statistics_indication(port_stats)
+        poncount += 1
+    print("Populating stats data: {} Ethernet ports, {} Pon ports ".format(ethcount, poncount))
+def print_loop():
+    print("a second has passed")
+
+    reactor.stop()
+
+@inlineCallbacks
+def my_callbacks():
+
+    global _loopCounter
+
+    if _loopCounter < loopTimes:
+        print 'first callback'
+        result = yield 1 # yielded values that aren't deferred come right back
+
+        print 'second callback got', result
+        d = Deferred()
+        reactor.callLater(5, d.callback, 2)
+        result = yield d # yielded deferreds will pause the generator
+
+        print 'third callback got', result # the result of the deferred
+
+        d = Deferred()
+        reactor.callLater(5, d.errback, Exception(3))
+
+        try:
+            yield d
+        except Exception, e:
+            result = e
+
+        print 'fourth callback got', repr(result) # the exception from the deferred
+    lc.stop()
+
+def cbLoopDone(result):
+    """
+    Called when loop was stopped with success.
+    """
+    print("Loop done.")
+    reactor.stop()
+
+
+def ebLoopFailed(failure):
+    """
+    Called when loop execution failed.
+    """
+    print(failure.getBriefTraceback())
+    reactor.stop()
+
 def main():
 
     try:
@@ -88,11 +149,12 @@ def main():
         log = setup_logging(config.get('logging', {}), "main")
 
         # random.seed(42)
-        print(random.sample(range(1000),k=10))
-        print(random.randint(100,1000))
 
-
-
+        # print(random.sample(range(1000),k=10))
+        # print(random.randint(100,1000))
+        #
+        #
+        #
         port_stats = get_port_stats(random.randint(100,1000))
         print("port stats :")
         print(port_stats)
@@ -102,34 +164,38 @@ def main():
         # Bring in a dummy device.  This will avoid any dependencies on the underlying
         # sysem in order to perform a standalone testing of the module.
 
-        # test the logger
-        # log.debug("testing the logger.....................", msg="some message")
-        # log.info("testing the logger.....................", msg="some message")
-        # log.warn("testing the logger.....................", msg="some message")
-        # log.error("testing the logger.....................", msg="some message")
-        # log.exception("testing the logger.....................", msg="some message")
+
         from dummy_device import DummyDevice
         device = DummyDevice(log=log)
-        stat_mgr = OpenOltStatisticsMgr(device,log)
 
-        # Send a test value
-        # 128
-        for i in range(0,3):
-            port_stats = get_port_stats(intf_id=i + 128, value=random.randint(100, 1000))
-            stat_mgr.port_statistics_indication(port_stats)
+        kargs = {"metrics_init" : False}
+        kargs = {}
+        stat_mgr = OpenOltStatisticsMgr(device,log, **kargs)
 
-        # build the pon port sets
-        for i in range(0,15):
-            intf_id = 0x2 << 28 | i
-            port_stats = get_port_stats(intf_id=intf_id, value=random.randint(100, 1000))
-            stat_mgr.port_statistics_indication(port_stats)
+        # call the statistics manager to init the collection loop
+        stat_mgr.init_pm_metrics()
 
-        foo = True
+        # set up the loop and start
+
+
+        lc = LoopingCall(ind_dataloop, stat_mgr)
+        lc.start(1.0)
+
+        # lc = LoopingCall(my_callbacks)
+        # reactor.callWhenRunning(my_callbacks)
+        # lc.start(1.0)
+
+        # Add callbacks for stop and failure.
+        # loopDeferred.addCallback(cbLoopDone)
+        # loopDeferred.addErrback(ebLoopFailed)
+        reactor.run()
 
         # asjson = json.dumps(pon_metrics_config,indent=2,sort_keys=True)
         print("Done")
     except Exception as err1:
         print(err1.message)
+        log.error("Error = ", errmsg=err1.message)
+        foo = True
 
     sys.exit()
 

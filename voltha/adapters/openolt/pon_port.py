@@ -54,6 +54,7 @@ class PonPort(object):
         self._intf_id = kwargs['intf_id']
         self.log = structlog.get_logger(device_id=self._device_id, pon_id=self._pon_id)
         self._port_no = kwargs['port_no']
+        self._port_id = 0
         # self._name = 'xpon 0/{}'.format(self._pon_id+1)
         self._label = 'pon-{}'.format(self._pon_id)
 
@@ -86,7 +87,9 @@ class PonPort(object):
 
 
         # Statistics  taken from nni_port
-
+        # self.intf_id = 0  #handled by getter
+        # self.port_no = 0  #handled by getter
+        # self.port_id = 0  #handled by getter
         self.rx_bytes = 0
         self.rx_packets = 0
         self.rx_mcast_packets = 0
@@ -133,13 +136,30 @@ class PonPort(object):
     def intf_id(self):
         return self._intf_id
 
+    @intf_id.setter
+    def intf_id(self, value):
+        self._intf_id = value
+
     @property
     def pon_id(self):
         return self._pon_id
+    @pon_id.setter
+    def pon_id(self, value):
+        self._pon_id = value
 
     @property
     def port_no(self):
         return self._port_no
+    @port_no.setter
+    def port_no(self, value):
+        self._port_no = value
+
+    @property
+    def port_id(self):
+        return self._port_id
+    @intf_id.setter
+    def port_id(self, value):
+        self._port_id = value
 
     @property
     def onus(self):

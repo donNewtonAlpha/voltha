@@ -78,11 +78,10 @@ class NniPort(object):
         self._current_speed = kwargs.pop('current_speed', OFPPF_100GB_FD)
         self._max_speed = kwargs.pop('max_speed', OFPPF_100GB_FD)
         self._device_port_no = kwargs.pop('device_port_no', self._port_no)
-        self.intf_id = kwargs.pop('intf_id', None)
-
 
         # Statistics
-
+        self.intf_id = kwargs.pop('intf_id', None)
+        self.port_no = 0
         self.rx_bytes = 0
         self.rx_packets = 0
         self.rx_mcast_packets = 0

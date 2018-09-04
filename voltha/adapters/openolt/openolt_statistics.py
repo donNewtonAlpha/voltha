@@ -21,9 +21,18 @@ from voltha.protos.device_pb2 import PmConfig, PmConfigs, PmGroupConfig
 from voltha.adapters.openolt.nni_port import NniPort
 from voltha.adapters.openolt.pon_port import PonPort
 from voltha.protos.device_pb2 import Port
+from twisted.internet import reactor, defer
+
 
 class OpenOltStatisticsMgr(object):
-    def __init__(self, openolt_device, log):
+    def __init__(self, openolt_device, log, **kargs):
+
+        """
+        kargs are used to pass debugging flags at this time.
+        :param openolt_device:
+        :param log:
+        :param kargs:
+        """
         self.device = openolt_device
         self.log = log
         # Northbound and Southbound ports
@@ -32,10 +41,13 @@ class OpenOltStatisticsMgr(object):
         self.southbound_ports = self.init_ports(type='pon')
 
         self.pm_metrics = None
-        self.init_pm_metrics()
+        # The following can be used to allow a standalone test routine to start
+        # the metrics independently
+        self.metrics_init = kargs.pop("metrics_init", True)
+        if self.metrics_init == True:
+            self.init_pm_metrics()
 
     def init_pm_metrics(self):
-        ############################################################################
         # Setup PM configuration for this device
         if self.pm_metrics is None:
             try:
@@ -45,6 +57,7 @@ class OpenOltStatisticsMgr(object):
                     'pon-ports': self.southbound_ports.values()
                 }
                 self.pm_metrics = OltPmMetrics(self.device.adapter_agent, self.device.device_id,
+                                               self.device.logical_device_id,
                                                grouped=True, freq_override=False,
                                                **kwargs)
                 """
@@ -59,189 +72,16 @@ class OpenOltStatisticsMgr(object):
                 self.pm_metrics.pon_pm_names = (self.get_openolt_port_pm_names())['pon_pm_names']
                 self.pm_metrics.pon_metrics_config = {m: PmConfig(name=m, type=t, enabled=True)
                                                  for (m, t) in self.pm_metrics.pon_pm_names}
-
-
                 pm_config = self.pm_metrics.make_proto()
                 self.log.info("initial-pm-config", pm_config=pm_config)
                 self.device.adapter_agent.update_device_pm_config(pm_config, init=True)
-                return
+                # Start collecting stats from the device after a brief pause
+                reactor.callLater(10, self.pm_metrics.start_collector)
             except Exception as e:
                 self.log.exception('pm-setup', e=e)
 
-            # Collection will be direct
-        ############################################################################
-
-    def get_openolt_port_pm_names(self):
-        """
-        This collects a dictionary of the custom port names
-        used by the openolt.
-
-        Some of these are the same as the pm names used by the olt_pm_metrics class
-        if the set is the same then there is no need to call this method.   However, when
-        custom names are used in the protos then the specific names should be pushed into
-        the olt_pm_metrics class.
-
-        :return:
-        """
-        nni_pm_names = {
-            ('admin_state', PmConfig.STATE),
-            ('oper_status', PmConfig.STATE),
-            ('intf_id', PmConfig.STATE),
-            ('port_no', PmConfig.GUAGE),
-            ('rx_bytes', PmConfig.COUNTER),
-            ('rx_packets', PmConfig.COUNTER),
-            ('rx_ucast_packets', PmConfig.COUNTER),
-            ('rx_mcast_packets', PmConfig.COUNTER),
-            ('rx_bcast_packets', PmConfig.COUNTER),
-            ('rx_error_packets', PmConfig.COUNTER),
-            ('tx_bytes', PmConfig.COUNTER),
-            ('tx_packets', PmConfig.COUNTER),
-            ('tx_ucast_packets', PmConfig.COUNTER),
-            ('tx_mcast_packets', PmConfig.COUNTER),
-            ('tx_bcast_packets', PmConfig.COUNTER),
-            ('tx_error_packets', PmConfig.COUNTER)
-        }
-        pon_pm_names = nni_pm_names  # for openolt the same structure is being used.
-        pon_pm_names_orig = {
-            ('admin_state', PmConfig.STATE),
-            ('oper_status', PmConfig.STATE),
-            ('port_no', PmConfig.GUAGE),  # Physical device port number
-            ('pon_id', PmConfig.GUAGE),
-            ('rx_packets', PmConfig.COUNTER),
-            ('rx_bytes', PmConfig.COUNTER),
-            ('tx_packets', PmConfig.COUNTER),
-            ('tx_bytes', PmConfig.COUNTER),
-            ('tx_bip_errors', PmConfig.COUNTER),
-            ('in_service_onus', PmConfig.GUAGE),
-            ('closest_onu_distance', PmConfig.GUAGE)
-        }
-        onu_pm_names = {
-            ('pon_id', PmConfig.GUAGE),
-            ('onu_id', PmConfig.GUAGE),
-            ('fiber_length', PmConfig.GUAGE),
-            ('equalization_delay', PmConfig.GUAGE),
-            ('rssi', PmConfig.GUAGE),  #
-        }
-        gem_pm_names = {
-            ('pon_id', PmConfig.GUAGE),
-            ('onu_id', PmConfig.GUAGE),
-            ('gem_id', PmConfig.GUAGE),
-            ('alloc_id', PmConfig.GUAGE),
-            ('rx_packets', PmConfig.COUNTER),
-            ('rx_bytes', PmConfig.COUNTER),
-            ('tx_packets', PmConfig.COUNTER),
-            ('tx_bytes', PmConfig.COUNTER),
-        }
-        # Build a dict for the names.  The caller will index to the correct values
-        names_dict = {"nni_pm_names": nni_pm_names,
-                      "pon_pm_names": pon_pm_names,
-                      "pon_pm_names_orig": pon_pm_names_orig,
-                      "onu_pm_names": onu_pm_names,
-                      "gem_pm_names": gem_pm_names,
-
-                      }
-
-        return names_dict
-
-    def init_ports(self,  device_id=12345, type="nni", log=None):
-        """
-        This method collects the port objects:  nni and pon that are updated with the
-        current data from the OLT
-
-        Both the northbound (nni) and southbound ports are indexed by the interface id (intf_id)
-        and NOT the port number. When the port object is instantiated it will contain the intf_id and
-        port_no values
-
-        :param type:
-        :param device_id:
-        :param log:
-        :return:
-        """
-        try:
-            if type == "nni":
-                nni_ports = {}
-                for i in range(0, 1):
-                    nni_port = self.build_port_object(i, type='nni')
-                    nni_ports[nni_port.intf_id] = nni_port
-                return nni_ports
-            elif type == "pon":
-                pon_ports = {}
-                for i in range(0, 16):
-                    pon_port = self.build_port_object(i, type="pon")
-                    pon_ports[pon_port.intf_id] = pon_port
-                return pon_ports
-            else:
-                self.log.exception("Unmapped port type requested = " , type=type)
-                raise Exception("Unmapped port type requested = " + type)
-
-        except Exception as err:
-            raise Exception(err)
-
-    def build_port_object(self, port_num, type="nni"):
-
-        try:
-            """ This builds a port object wich is passed as to the """
-
-            if type == "nni":
-                # port num is the only required item
-
-                kwargs = {
-                    'port_no': port_num,
-                    'intf_id': port_num + 128,
-                    "device_id": self.device.device_id
-                }
-                nni_port = NniPort
-                port = nni_port(**kwargs)
-                return port
-
-            elif type == "pon":
-                # PON ports require a different configuration
-                #  intf_id and pon_id are currently equal.
-                kwargs = {
-                    'port_no': port_num,
-                    'intf_id': 0x2 << 28 | port_num,
-                    'pon-id': 0x2 << 28 | port_num,
-                    "device_id": self.device.device_id
-                }
-                pon_port = PonPort
-                port = pon_port(**kwargs)
-                return port
-
-            else:
-                raise Exception("Unknown port type")
-
-        except Exception as err:
-            raise Exception(err)
-
-    def update_port_object_kpi_data(self, port_object, datadict={}):
-        """
-        This method takes the formated data the is marshalled from
-        the initicator collector
-
-        :param port: The port class to be updated
-        :param datadict:
-        :return:
-        """
-
-        try:
-
-            if isinstance(port_object, NniPort):
-                for k, v in datadict.items():
-                    if hasattr(port_object, k):
-                        setattr(port_object, k, v)
-            elif isinstance(port_object, PonPort):
-                for k, v in datadict.items():
-                    if hasattr(port_object, k):
-                        setattr(port_object, k, v)
-            else:
-                raise Exception("Must be either PON or NNI port.")
-            return
-        except Exception as err:
-            self.log.exception("Caught error updating port data: ", errormsg=err.message)
-            raise Exception(err)
-
     def port_statistics_indication(self, port_stats):
-        self.log.info('port-stats-collected', stats=port_stats)
+        # self.log.info('port-stats-collected', stats=port_stats)
         self.ports_statistics_kpis(port_stats)
         #FIXME: etcd problem, do not update objects for now
 
@@ -293,7 +133,9 @@ class OpenOltStatisticsMgr(object):
         """
 
         try:
-            if 128 < port_stats.intf_id < 133 :
+            intf_id = port_stats.intf_id
+
+            if 128 < intf_id < 133 :
                 """
                 for this release we are only interested in intf_id 128 for Northbound.
                 we are not using 129, 132
@@ -318,6 +160,9 @@ class OpenOltStatisticsMgr(object):
                 pm_data["bip_errors"] = port_stats.bip_errors
 
 
+                pm_data["intf_id"] = intf_id
+
+
                 prefix = 'voltha.openolt.{}'.format(self.device.device_id)
 
                 """
@@ -332,40 +177,36 @@ class OpenOltStatisticsMgr(object):
                 """
                 #
                 # FIXME
-                intf_id = port_stats.intf_id
-
                 prefixes = {}
                 # Currently filter only 128 since the deployment will only be using port 0 / intf_id 128
                 if intf_id == 128:
                     self.update_port_object_kpi_data(
                         port_object=self.northbound_ports[port_stats.intf_id], datadict=pm_data)
+                    #
+                    # foo = True
+                    #
+                    # port_no = intf_id - 128
+                    # prefixes = {
+                    #     prefix + '.nni.{}.'.format(port_no): MetricValuePairs(
+                    #         metrics=pm_data)
+                    # }
+                    # foo = True
 
-                    port_no = intf_id - 128
-                    prefixes = {
-                        prefix + '.nni.{}.'.format(port_no): MetricValuePairs(
-                            metrics=pm_data)
-                    }
                 else:
                     self.update_port_object_kpi_data(
                         port_object=self.southbound_ports[port_stats.intf_id],datadict=pm_data)
-                    port_no = intf_id & 0xF
-                    prefixes = {
-                        prefix + '.pon.{}'.format(port_no): MetricValuePairs(
-                            metrics=pm_data)
-                    }
+                    # port_no = intf_id & 0xF
+                    # prefixes = {
+                    #     prefix + '.pon.{}'.format(port_no): MetricValuePairs(
+                    #         metrics=pm_data)
+                    # }
 
-                kpi_event = KpiEvent(
-                    type=KpiEventType.slice,
-                    ts=port_stats.timestamp,
-                    prefixes=prefixes)
-                self.device.adapter_agent.submit_kpis(kpi_event)
         except Exception as err:
             self.log.exception("Error publishing kpi statistics. ", errmessage=err)
 
     def update_logical_port_stats(self, port_stats):
-        # FIXME
-        label = 'nni-{}'.format(port_stats.intf_id)
         try:
+            label = 'nni-{}'.format(port_stats.intf_id)
             logical_port = self.device.adapter_agent.get_logical_port(
                 self.device.logical_device_id, label)
         except KeyError as e:
@@ -379,7 +220,6 @@ class OpenOltStatisticsMgr(object):
                 port_stats=port_stats)
             return
 
-
         logical_port.ofp_port_stats.rx_packets = port_stats.rx_packets
         logical_port.ofp_port_stats.rx_bytes = port_stats.rx_bytes
         logical_port.ofp_port_stats.tx_packets = port_stats.tx_packets
@@ -392,3 +232,234 @@ class OpenOltStatisticsMgr(object):
 
         self.device.adapter_agent.update_logical_port(
             self.device.logical_device_id, logical_port)
+
+    """
+    The following 4 methods customer naming, the generation of the port objects, building of those
+    objects and populating new data.   The pm metrics operate on the value that are contained in the Port objects.
+    This class updates those port objects with the current data from the grpc indication and 
+    post the data on a fixed interval.
+    
+    """
+    def get_openolt_port_pm_names(self):
+        """
+        This collects a dictionary of the custom port names
+        used by the openolt.
+
+        Some of these are the same as the pm names used by the olt_pm_metrics class
+        if the set is the same then there is no need to call this method.   However, when
+        custom names are used in the protos then the specific names should be pushed into
+        the olt_pm_metrics class.
+
+        :return:
+        """
+        nni_pm_names = {
+            ('intf_id', PmConfig.CONTEXT),  # Physical device interface ID/Port number
+
+            ('admin_state', PmConfig.STATE),
+            ('oper_status', PmConfig.STATE),
+            ('intf_id', PmConfig.STATE),
+            ('port_no', PmConfig.GAUGE),
+            ('rx_bytes', PmConfig.COUNTER),
+            ('rx_packets', PmConfig.COUNTER),
+            ('rx_ucast_packets', PmConfig.COUNTER),
+            ('rx_mcast_packets', PmConfig.COUNTER),
+            ('rx_bcast_packets', PmConfig.COUNTER),
+            ('rx_error_packets', PmConfig.COUNTER),
+            ('tx_bytes', PmConfig.COUNTER),
+            ('tx_packets', PmConfig.COUNTER),
+            ('tx_ucast_packets', PmConfig.COUNTER),
+            ('tx_mcast_packets', PmConfig.COUNTER),
+            ('tx_bcast_packets', PmConfig.COUNTER),
+            ('tx_error_packets', PmConfig.COUNTER)
+        }
+        nni_pm_names_from_kpi_extension = {
+            ('intf_id', PmConfig.CONTEXT),  # Physical device interface ID/Port number
+
+            ('admin_state', PmConfig.STATE),
+            ('oper_status', PmConfig.STATE),
+
+            ('rx_bytes', PmConfig.COUNTER),
+            ('rx_packets', PmConfig.COUNTER),
+            ('rx_ucast_packets', PmConfig.COUNTER),
+            ('rx_mcast_packets', PmConfig.COUNTER),
+            ('rx_bcast_packets', PmConfig.COUNTER),
+            ('rx_error_packets', PmConfig.COUNTER),
+
+            ('tx_bytes', PmConfig.COUNTER),
+            ('tx_packets', PmConfig.COUNTER),
+            ('tx_ucast_packets', PmConfig.COUNTER),
+            ('tx_mcast_packets', PmConfig.COUNTER),
+            ('tx_bcast_packets', PmConfig.COUNTER),
+            ('tx_error_packets', PmConfig.COUNTER),
+            ('rx_crc_errors', PmConfig.COUNTER),
+            ('bip_errors', PmConfig.COUNTER),
+        }
+
+        # pon_names uses same structure as nmi_names with the addition of pon_id to context
+        pon_pm_names = {
+            ('intf_id', PmConfig.CONTEXT),  # Physical device port number (PON)
+            ('pon_id', PmConfig.CONTEXT),  # PON ID (0..n)
+            ('port_no', PmConfig.CONTEXT),
+
+            ('admin_state', PmConfig.STATE),
+            ('oper_status', PmConfig.STATE),
+            ('rx_bytes', PmConfig.COUNTER),
+            ('rx_packets', PmConfig.COUNTER),
+            ('rx_ucast_packets', PmConfig.COUNTER),
+            ('rx_mcast_packets', PmConfig.COUNTER),
+            ('rx_bcast_packets', PmConfig.COUNTER),
+            ('rx_error_packets', PmConfig.COUNTER),
+            ('tx_bytes', PmConfig.COUNTER),
+            ('tx_packets', PmConfig.COUNTER),
+            ('tx_ucast_packets', PmConfig.COUNTER),
+            ('tx_mcast_packets', PmConfig.COUNTER),
+            ('tx_bcast_packets', PmConfig.COUNTER),
+            ('tx_error_packets', PmConfig.COUNTER)
+        }
+        pon_pm_names_from_kpi_extension = {
+            ('intf_id', PmConfig.CONTEXT),        # Physical device port number (PON)
+            ('pon_id', PmConfig.CONTEXT),         # PON ID (0..n)
+
+            ('admin_state', PmConfig.STATE),
+            ('oper_status', PmConfig.STATE),
+            ('rx_packets', PmConfig.COUNTER),
+            ('rx_bytes', PmConfig.COUNTER),
+            ('tx_packets', PmConfig.COUNTER),
+            ('tx_bytes', PmConfig.COUNTER),
+            ('tx_bip_errors', PmConfig.COUNTER),
+            ('in_service_onus', PmConfig.GAUGE),
+            ('closest_onu_distance', PmConfig.GAUGE)
+        }
+        onu_pm_names = {
+            ('intf_id', PmConfig.CONTEXT),        # Physical device port number (PON)
+            ('pon_id', PmConfig.CONTEXT),
+            ('onu_id', PmConfig.CONTEXT),
+
+            ('fiber_length', PmConfig.GAUGE),
+            ('equalization_delay', PmConfig.GAUGE),
+            ('rssi', PmConfig.GAUGE),
+        }
+        gem_pm_names = {
+            ('intf_id', PmConfig.CONTEXT),        # Physical device port number (PON)
+            ('pon_id', PmConfig.CONTEXT),
+            ('onu_id', PmConfig.CONTEXT),
+            ('gem_id', PmConfig.CONTEXT),
+
+            ('alloc_id', PmConfig.GAUGE),
+            ('rx_packets', PmConfig.COUNTER),
+            ('rx_bytes', PmConfig.COUNTER),
+            ('tx_packets', PmConfig.COUNTER),
+            ('tx_bytes', PmConfig.COUNTER),
+        }
+        # Build a dict for the names.  The caller will index to the correct values
+        names_dict = {"nni_pm_names": nni_pm_names,
+                      "pon_pm_names": pon_pm_names,
+                      "pon_pm_names_orig": pon_pm_names_from_kpi_extension,
+                      "onu_pm_names": onu_pm_names,
+                      "gem_pm_names": gem_pm_names,
+
+                      }
+
+        return names_dict
+
+    def init_ports(self,  device_id=12345, type="nni", log=None):
+        """
+        This method collects the port objects:  nni and pon that are updated with the
+        current data from the OLT
+
+        Both the northbound (nni) and southbound ports are indexed by the interface id (intf_id)
+        and NOT the port number. When the port object is instantiated it will contain the intf_id and
+        port_no values
+
+        :param type:
+        :param device_id:
+        :param log:
+        :return:
+        """
+        try:
+            if type == "nni":
+                nni_ports = {}
+                for i in range(0, 1):
+                    nni_port = self.build_port_object(i, type='nni')
+                    nni_ports[nni_port.intf_id] = nni_port
+                return nni_ports
+            elif type == "pon":
+                pon_ports = {}
+                for i in range(0, 16):
+                    pon_port = self.build_port_object(i, type="pon")
+                    pon_ports[pon_port.intf_id] = pon_port
+                return pon_ports
+            else:
+                self.log.exception("Unmapped port type requested = " , type=type)
+                raise Exception("Unmapped port type requested = " + type)
+
+        except Exception as err:
+            raise Exception(err)
+
+    def build_port_object(self, port_num, type="nni"):
+
+        try:
+            """ 
+             This builds a port object which is added to the 
+             appropriate northbound or southbound values
+            """
+            if type == "nni":
+                kwargs = {
+                    'port_no': port_num,
+                    'intf_id': port_num + 128,
+                    "device_id": self.device.device_id
+                }
+                nni_port = NniPort
+                port = nni_port(**kwargs)
+                return port
+
+            elif type == "pon":
+                # PON ports require a different configuration
+                #  intf_id and pon_id are currently equal.
+                kwargs = {
+                    'port_no': port_num,
+                    'intf_id': 0x2 << 28 | port_num,
+                    'pon-id': 0x2 << 28 | port_num,
+                    "device_id": self.device.device_id
+                }
+                pon_port = PonPort
+                port = pon_port(**kwargs)
+                return port
+
+            else:
+                self.log.exception("Unknown port type")
+                raise Exception("Unknown port type")
+
+        except Exception as err:
+            self.log.exception("Unknown port type", error=err)
+            raise Exception(err)
+
+    def update_port_object_kpi_data(self, port_object, datadict={}):
+        """
+        This method takes the formatted data the is marshalled from
+        the initicator collector and updates the corresponding property by
+        attr get and set.
+
+        :param port: The port class to be updated
+        :param datadict:
+        :return:
+        """
+
+        try:
+            cur_attr = ""
+            if isinstance(port_object, NniPort):
+                for k, v in datadict.items():
+                    cur_attr = k
+                    if hasattr(port_object, k):
+                        setattr(port_object, k, v)
+            elif isinstance(port_object, PonPort):
+                for k, v in datadict.items():
+                    cur_attr = k
+                    if hasattr(port_object, k):
+                        setattr(port_object, k, v)
+            else:
+                raise Exception("Must be either PON or NNI port.")
+            return
+        except Exception as err:
+            self.log.exception("Caught error updating port data: ", cur_attr=cur_attr, errormsg=err.message)
+            raise Exception(err)
