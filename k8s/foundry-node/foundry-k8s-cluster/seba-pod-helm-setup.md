@@ -11,7 +11,7 @@ cd ~/
 mkdir -p source
 cd ~/source
 git clone https://github.com/donNewtonAlpha/voltha.git
-git clone https://gerrit.opencord.org/helm-charts
+git clone https://github.com/donNewtonAlpha/helm-charts.git
 git clone https://bitbucket.org/onfcord/podconfigs.git
 cd ~/
 
@@ -49,18 +49,38 @@ helm repo list
 ```
 
 
-XOS Core and a Kafka that both voltha, onos and xos share
+Install Kafka and etcd-operator from hosted repos
+```
+helm install -n cord-kafka incubator/kafka --set replicas=1 --set persistence.enabled=false --set zookeeper.servers=1 --set zookeeper.persistence.enabled=false
+helm install -n etcd-operator stable/etcd-operator
+
+# wait until the etcd CustomResourceDefinitions are added
+kubectl api-resources |grep etcd.database.coreos.com
+```
+
+
+Install etcd-operator managed etcd cluster
+```
+helm install -n etcd-cluster etcd-cluster
+
+# wait until all 3 etcd-cluster-XXXX are Running
+kubectl get pods -o wide |grep etcd-cluster
+```
+
+
+Install XOS Core
 ```
 helm dep update xos-core
 helm install -n xos-core xos-core
-helm install -n cord-kafka incubator/kafka --set replicas=1 --set persistence.enabled=false --set zookeeper.servers=1 --set zookeeper.persistence.enabled=false 
 ```
+
 
 Install voltha.  Note the custom values.  There we define the docker images we want to run, and the kafka that we want voltha to share with xos and onos.
 ```
 helm dep update voltha
-helm install -n voltha voltha --set etcd-operator.customResources.createEtcdClusterCRD=false -f ~/foundry-k8s-cluster/att-seba-voltha-values.yaml
+helm install -n voltha voltha -f ~/foundry-k8s-cluster/att-seba-voltha-values.yaml
 ```
+
 
 Install onos
 ```
@@ -68,20 +88,16 @@ helm dep update onos
 helm install -n onos onos -f ~/source/helm-charts/configs/onos.yaml
 ```
 
-Give voltha a couple minutes to install. The upgrade step is needed because of a bug with etcd-operator.   Need to "upgrade" to get etcd-cluster pods.
-Verify with kubectl get pods that 3 etcd-cluster-000X are running.
-```
-sleep 120
-helm upgrade voltha voltha --set etcd-operator.customResources.createEtcdClusterCRD=true -f ~/foundry-k8s-cluster/att-seba-voltha-values.yaml
-```
 
 Install att workflow xos-to-voltha and onos syncronizers.  Business logic specific.  Load needed onos apps into voltha onos.
 ```
 helm dep update xos-profiles/att-workflow
 helm install -n att-workflow xos-profiles/att-workflow
-# give the workflow pods time to populate models, load apps, etc.
-sleep 120
+
+# give the workflow pods time to populate models, load apps, etc.  Tosca loader task will be Complete
+kubectl get pods -o wide |grep Complete
 ```
+
 
 
 ## POD, OLT, and Subscriber Provisioning
@@ -90,7 +106,8 @@ Below is where provisioning starts.  These are specific to the QA pod so change 
 ```
 cd ~/source/podconfigs/tosca/att-workflow
 
-localip=10.64.1.X
+# replace mgmtbr with whatever your physical interface host interface is.  eno1, eth0, etc.
+localip=$(ip addr show dev mgmtbr|grep "inet "|awk '{ print $2 }' |cut -d'/' -f1)
 ```
 
 Load radius server config into onos voltha.  You may need to replace foundry-simple-netcfg.json with foundry-full-netcfg.json depending on if xos syncronizers can fully populate/query sadis.
@@ -100,11 +117,13 @@ Load radius server config into onos voltha.  You may need to replace foundry-sim
 
 Run the tosca model additions to create pod, olt line card, onu whitelist additions, and actual subscriber data.
 ```
-curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --data-binary @foundry-pod-config.yaml http://${localip}:30007/run
 curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --data-binary @foundry-pod-olt.yaml http://${localip}:30007/run
 curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --data-binary @foundry-whitelist.yaml http://${localip}:30007/run
 curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --data-binary @foundry-subscribers.yaml http://${localip}:30007/run
 ```
+
+At this point plug in ONU and RG that can authenticate to the ATT lab radius server.  VLANS should be pushed on successfull eap authentication and traffic pass all the way out to the BNG.
+
 
 ## Troubleshoot and Purge
 
@@ -116,9 +135,15 @@ kubectl exec -ti kafkacat-86bf65f7f7-8w5m2 -- kafkacat -b cord-kafka -t authenti
 
 To delete everything.  
 ```
-helm delete --purge att-workflow cord-kafka onos-fabric onos-voltha voltha xos-core
+helm delete --purge att-workflow onos voltha xos-core etcd-cluster etcd-operator cord-kafka
+
+# force removal of CRD added by etcd-operator
+kubectl delete customresourcedefinition etcdclusters.etcd.database.coreos.com
+kubectl delete customresourcedefinition etcdbackups.etcd.database.coreos.com
+kubectl delete customresourcedefinition etcdrestores.etcd.database.coreos.com
+
+kubectl delete endpoints etcd-operator
+kubectl delete clusterrole etcd-operator
+kubectl delete clusterrolebinding etcd-operator
 ```
-
-At this point plug in ONU and RG that can authenticate to the ATT lab radius server.  VLANS should be pushed on successfull eap authentication and traffic pass all the way out to the BNG.
-
 
