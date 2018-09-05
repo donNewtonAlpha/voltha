@@ -55,7 +55,7 @@ helm install -n cord-kafka incubator/kafka --set replicas=1 --set persistence.en
 helm install -n etcd-operator stable/etcd-operator
 
 # wait until the etcd CustomResourceDefinitions are added
-kubectl api-resources |grep etcd
+kubectl api-resources |grep etcd.database.coreos.com
 ```
 
 
