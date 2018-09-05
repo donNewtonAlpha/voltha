@@ -1,7 +1,7 @@
 # Kubernetes 3 Server Cluster Build Notes
 
 
-Requires three hosts.  8 cpu, 16gb memory, 100GB disk.  Preferably SSD.
+Requires three hosts.  8 cpu, 16gb memory, 100GB disk.  Preferably SSD.  Swap must be disabled or permanently removed!
 Ubuntu 16.04 patched and updated and on the network, internet.  
 
 Note the IP and hostnames as will be used later in configs
@@ -230,9 +230,9 @@ scp kubeadm-config-v2.yaml foundry@master2:~/foundry-k8s-cluster/
 ```
 
 
-## Manual kubeadm phase step execution
+### Manual kubeadm phase step execution
 
-Use kubeadm executing each step discretely rather than the typical "init" all at once.  
+Use kubeadm executing each step discretely on each host rather than the typical "init" all at once.  
 
 ```
 kubeadm alpha phase kubelet config write-to-disk --config kubeadm-config-v2.yaml
@@ -244,7 +244,7 @@ kubeadm alpha phase controlplane all --config kubeadm-config-v2.yaml
 
 ### Start kubelet
 
-This starts the default manifest pods
+This starts the default manifest pods on each host.
 ```
 systemctl start kubelet
 ```
@@ -280,9 +280,10 @@ Check /var/log/syslog as kubelet will log there its attempts and running the sta
 
 
 ## Run this section on a SINGLE HOST. Just from master0
+
 ### Proceed with final kubeadm steps
 
-Token creation, config upload into the cluster itself.  And the installation of dns and proxy containers.
+Token creation, config upload into the cluster itself.  And the installation of dns and proxy containers.  Only needs to be run from one host given the results of this end up in k8s etcd (and is clustered).
 ```
 kubeadm config upload from-flags 
 kubeadm alpha phase bootstrap-token cluster-info /etc/kubernetes/admin.conf
