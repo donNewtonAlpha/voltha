@@ -88,3 +88,6 @@ ssh -p 30115 karaf@master0
 #   should list the installed apps
 ```
 
+At this point you can use the voltha cli to preprovision and enable one or more edgecore OLT linecards.  Be sure to run bal_core_dist and openolt on the edgecore linecard.  Voltha will discover the onu, inform onos, and eap/dhcp should take over.
+
+

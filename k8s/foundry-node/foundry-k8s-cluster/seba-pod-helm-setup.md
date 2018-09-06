@@ -115,7 +115,7 @@ Load radius server config into onos voltha.  You may need to replace foundry-sim
 ~/foundry-k8s-cluster/quick-onos-update.sh $localip foundry-simple-netcfg.json
 ```
 
-Run the tosca model additions to create pod, olt line card, onu whitelist additions, and actual subscriber data.
+Run the tosca model additions to create pod, olt line card, onu whitelist additions, and actual subscriber data.  One important difference from previous voltha installs is you do NOT have to preprovision or enable the OLT via the voltha cli.   The API provisioning of the foundry-pod-olt.yaml below does that step.  You DO still need to start bal_core_dist and openolt on the edgecore itself.
 ```
 curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --data-binary @foundry-pod-olt.yaml http://${localip}:30007/run
 curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --data-binary @foundry-whitelist.yaml http://${localip}:30007/run
