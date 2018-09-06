@@ -53,14 +53,14 @@ kubectl get pods -o wide |grep etcd-cluster
 Install voltha.  Note the custom values.  There we define the docker images we want to run, and the kafka that we want voltha to share with xos and onos.
 ```
 helm dep update voltha
-helm install -n voltha voltha -f ~/foundry-k8s-cluster/att-seba-voltha-values.yaml
+helm install -n voltha voltha -f ~/foundry-k8s-cluster/simple-voltha-values.yaml
 ```
 
 
 Install onos
 ```
 helm dep update onos
-helm install -n onos-voltha onos -f ~/foundry-k8s-cluster/att-seba-onos-voltha.yaml
+helm install -n onos onos -f ~/foundry-k8s-cluster/simple-onos-values.yaml
 ```
 
 
