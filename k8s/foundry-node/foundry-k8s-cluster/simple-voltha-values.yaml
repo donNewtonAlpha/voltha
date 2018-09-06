@@ -7,11 +7,11 @@ etcd:
 
 envoyForEtcdImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-envoy:1.8.23'
 netconfImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-netconf:1.1'
-ofagentImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-ofagent:unreachable-propagation'
+ofagentImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-ofagent:gold-candidate'
 dashdImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-dashd:1.0'
 shovelImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-shovel:1.0'
 vcliImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-cli:1.8.23'
-vcoreImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-voltha:matt-test'
+vcoreImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-voltha:gold-candidate'
 
 ofagent_args:
 - "/ofagent/ofagent/main.py"
