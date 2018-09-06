@@ -1,8 +1,8 @@
 # Basic voltha install with helm
 
-Minimal setup without seba pods.  Assumes a working k8s environment, single server or cluster.
+Minimal setup without seba pods.  Assumes a working k8s environment, single server or cluster.  Helm must also already be installed.  See other notes for k8s and helm setup.
 
-## Install voltha and dependencies.  finally, why we are here
+## Clone Needed Repos
 
 Checkout needed repos.  Some of this may exist if youve followed previous notes
 ```
@@ -18,7 +18,7 @@ ln -s ~/source/voltha/k8s/foundry-node/foundry-k8s-cluster
 ```
 
 
-## Helm install 
+## Helm setup 
 
 Foundry specific values, currently dockers images from the foundry docker-repo
 ```
@@ -30,6 +30,7 @@ helm repo update
 helm repo list
 ```
 
+## Install charts
 
 Install Kafka and etcd-operator from hosted repos
 ```
