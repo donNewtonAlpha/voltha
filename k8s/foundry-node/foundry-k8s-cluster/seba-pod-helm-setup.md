@@ -3,7 +3,25 @@
 Will run on a single k8s instance or a 3 server cluster.  See other notes on how to setup.  These helm charts and docker images are under daily active development and can break as often with no notice.  Work is being done to create snapshots of stable instances.  These notes are subject to change until things stabilize.  This should be runnable as a non-root user assuming previous install steps allowed this.
 
 
-## Clone needed repos
+## Verify Docker Repo Access
+
+The docker images used are downloaded from the foundry docker repo docker-repo.dev.atl.foundry.att.com.   This repo requires your source public IP to be added to a whitelist before being able to download images.   Contact mj3580@att.com for access.
+
+
+To test this access works run the following:
+
+Test locally installed Foundry CA approves https server cert
+```
+curl -v https://docker-repo.dev.atl.foundry.att.com:5000/v2/_catalog
+```
+
+Test docker pull
+```
+docker pull docker-repo.dev.atl.foundry.att.com:5000/ubuntu:16.04
+```
+
+
+## Clone needed github repos
 
 We use a set of custom helm values yaml file for our deployments, kept in our voltha github clone
 ```
