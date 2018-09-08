@@ -1,6 +1,6 @@
 # Full SEBA Pod Installation Notes
 
-Will run on a single k8s instance or a 3 server cluster.  See other notes on how to setup.  These helm charts and docker images are under daily active development and can break as often with no notice.  Work is being done to create snapshots of stable instances.  These notes are subject to change until things stabilize.
+Will run on a single k8s instance or a 3 server cluster.  See other notes on how to setup.  These helm charts and docker images are under daily active development and can break as often with no notice.  Work is being done to create snapshots of stable instances.  These notes are subject to change until things stabilize.  This should be runnable as a non-root user assuming previous install steps allowed this.
 
 
 ## Clone needed repos

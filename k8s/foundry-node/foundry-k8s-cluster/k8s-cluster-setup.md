@@ -404,8 +404,14 @@ kubectl get pods --all-namespaces -o wide |grep tiller
 helm list
 # should be empty
 
-help repo list
+
+helm repo list
+
 # should show 2 or 3 repos
+NAME     	URL
+stable   	https://kubernetes-charts.storage.googleapis.com
+local    	http://127.0.0.1:8879/charts
+incubator	https://kubernetes-charts-incubator.storage.googleapis.com/
 ```
 
 ## Finished
