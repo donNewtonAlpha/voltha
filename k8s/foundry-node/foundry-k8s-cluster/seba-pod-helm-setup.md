@@ -1,6 +1,8 @@
 # Full SEBA Pod Installation Notes
 
-Will run on a single k8s instance or a 3 server cluster.  See other notes on how to setup.  These helm charts and docker images are under daily active development and can break as often with no notice.  Work is being done to create snapshots of stable instances.  These notes are subject to change until things stabilize.  This should be runnable as a non-root user assuming previous install steps allowed this.
+Will run on a single k8s instance or a 3 server cluster.  Helm must also already be installed.  See other notes for k8s and helm setup. 
+These helm charts and docker images are under daily active development and can break as often with no notice.  Work is being done to create snapshots of stable instances.  
+These notes are subject to change until things stabilize.  This should be runnable as a non-root user assuming previous install steps allowed this.
 
 
 ## Verify Docker Repo Access
@@ -37,24 +39,8 @@ cd ~/
 ln -s ~/source/voltha/k8s/foundry-node/foundry-k8s-cluster
 ```
 
-### Install helm
 
-Skip if you already have helm/tiller running.  
-```
-wget https://storage.googleapis.com/kubernetes-helm/helm-v2.9.1-linux-amd64.tar.gz
-mkdir helm-unpack
-cd helm-unpack/
-tar -zxvf ../helm-v2.9.1-linux-amd64.tar.gz
-sudo cp linux-amd64/helm /usr/local/bin/
-
-cd ~/foundry-k8s-cluster
-kubectl apply -f helm-role.yaml
-helm init --service-account tiller
-export HELM_HOME=/home/foundry/.helm
-```
-
-
-# Install cord helm charts. xos, onos, voltha etc
+## Install cord helm charts. xos, onos, voltha etc
 
 See https://guide.opencord.org/profiles/rcord/workflows/att.html .
 This is just a condensed version of those instructions, with the addition of our custom environment values yaml files.

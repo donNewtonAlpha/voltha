@@ -1,8 +1,28 @@
 # Basic voltha install with helm
 
 Minimal setup without seba pods.  Assumes a working k8s environment, single server or cluster.  Helm must also already be installed.  See other notes for k8s and helm setup.
+This should be runnable as a non-root user assuming previous install steps allowed this.
 
-## Clone Needed Repos
+
+## Verify Docker Repo Access
+
+The docker images used are downloaded from the foundry docker repo docker-repo.dev.atl.foundry.att.com.   This repo requires your source public IP to be added to a whitelist before being able to download images.   Contact mj3580@att.com for access.
+
+
+To test this access works run the following:
+
+Test locally installed Foundry CA approves https server cert
+```
+curl -v https://docker-repo.dev.atl.foundry.att.com:5000/v2/_catalog
+```
+
+Test docker pull
+```
+docker pull docker-repo.dev.atl.foundry.att.com:5000/ubuntu:16.04
+```
+
+
+## Clone needed github repos
 
 Checkout needed repos.  Some of this may exist if youve followed previous notes
 ```
@@ -29,6 +49,7 @@ helm repo add cord https://charts.opencord.org/master
 helm repo update
 helm repo list
 ```
+
 
 ## Install charts
 
