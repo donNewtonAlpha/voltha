@@ -20,6 +20,7 @@ import grpc
 from voltha.protos.openflow_13_pb2 import OFPXMC_OPENFLOW_BASIC, \
     ofp_flow_stats, ofp_match, OFPMT_OXM, Flows, FlowGroups, \
     OFPXMT_OFB_IN_PORT, OFPXMT_OFB_VLAN_VID
+from voltha.protos.device_pb2 import Port
 import voltha.core.flow_decomposer as fd
 import openolt_platform as platform
 from voltha.adapters.openolt.protos import openolt_pb2
@@ -281,6 +282,7 @@ class OpenOltFlowMgr(object):
     # To-Do right now only one GEM port is supported, so below method
     # will take care of handling all the p bits.
     # We need to revisit when mulitple gem port per p bits is needed.
+    # Waiting for Technology profile
     def add_hsia_flow(self, intf_id, onu_id, classifier, action,
                       direction, hsia_id, logical_flow):
 
@@ -325,7 +327,8 @@ class OpenOltFlowMgr(object):
         downstream_logical_flow = copy.deepcopy(logical_flow)
         for oxm_field in downstream_logical_flow.match.oxm_fields:
             if oxm_field.ofb_field.type == OFPXMT_OFB_IN_PORT:
-                oxm_field.ofb_field.port = 128
+                oxm_field.ofb_field.port = \
+                    platform.intf_id_to_port_no(0, Port.ETHERNET_NNI)
 
         classifier['udp_src'] = 67
         classifier['udp_dst'] = 68
@@ -350,14 +353,7 @@ class OpenOltFlowMgr(object):
                        downlink_eapol_id=EAPOL_DOWNLINK_FLOW_INDEX,
                        vlan_id=DEFAULT_MGMT_VLAN):
 
-        downlink_classifier = {}
-        downlink_classifier['eth_type'] = EAP_ETH_TYPE
-        downlink_classifier['pkt_tag_type'] = 'single_tag'
-        downlink_classifier['vlan_vid'] = vlan_id
 
-        downlink_action = {}
-        downlink_action['push_vlan'] = True
-        downlink_action['vlan_vid'] = vlan_id
 
         uplink_classifier = {}
         uplink_classifier['eth_type'] = EAP_ETH_TYPE
@@ -387,31 +383,43 @@ class OpenOltFlowMgr(object):
 
         self.add_flow_to_device(upstream_flow, logical_flow)
 
-        # Add Downstream EAPOL Flow.
-        downlink_flow_id = platform.mk_flow_id(intf_id, onu_id,
-                                               downlink_eapol_id)
+        if vlan_id == DEFAULT_MGMT_VLAN:
 
-        downstream_flow = openolt_pb2.Flow(
-            onu_id=onu_id, flow_id=downlink_flow_id, flow_type="downstream",
-            access_intf_id=intf_id, gemport_id=gemport_id,
-            priority=logical_flow.priority,
-            classifier=self.mk_classifier(downlink_classifier),
-            action=self.mk_action(downlink_action))
+            # Add Downstream EAPOL Flow, Only for first EAP flow
 
-        downstream_logical_flow = ofp_flow_stats(id=logical_flow.id,
-             cookie=logical_flow.cookie, table_id=logical_flow.table_id,
-             priority=logical_flow.priority, flags=logical_flow.flags)
+            downlink_classifier = {}
+            downlink_classifier['pkt_tag_type'] = 'single_tag'
+            downlink_classifier['vlan_vid'] = 4000 - onu_id
 
-        downstream_logical_flow.match.oxm_fields.extend(fd.mk_oxm_fields([
-            fd.in_port(fd.get_out_port(logical_flow)),
-            fd.eth_type(EAP_ETH_TYPE), fd.vlan_vid(vlan_id | 0x1000)]))
-        downstream_logical_flow.match.type = OFPMT_OXM
 
-        downstream_logical_flow.instructions.extend(
-            fd.mk_instructions_from_actions([fd.output(
-            platform.mk_uni_port_num(intf_id, onu_id))]))
+            downlink_action = {}
+            downlink_action['push_vlan'] = True
+            downlink_action['vlan_vid'] = vlan_id
 
-        self.add_flow_to_device(downstream_flow, downstream_logical_flow)
+            downlink_flow_id = platform.mk_flow_id(intf_id, onu_id,
+                                                   downlink_eapol_id)
+
+            downstream_flow = openolt_pb2.Flow(
+                onu_id=onu_id, flow_id=downlink_flow_id, flow_type="downstream",
+                access_intf_id=intf_id, gemport_id=gemport_id,
+                priority=logical_flow.priority,
+                classifier=self.mk_classifier(downlink_classifier),
+                action=self.mk_action(downlink_action))
+
+            downstream_logical_flow = ofp_flow_stats(id=logical_flow.id,
+                 cookie=logical_flow.cookie, table_id=logical_flow.table_id,
+                 priority=logical_flow.priority, flags=logical_flow.flags)
+
+            downstream_logical_flow.match.oxm_fields.extend(fd.mk_oxm_fields([
+                fd.in_port(fd.get_out_port(logical_flow)),
+                fd.vlan_vid((4000 - onu_id) | 0x1000)]))
+            downstream_logical_flow.match.type = OFPMT_OXM
+
+            downstream_logical_flow.instructions.extend(
+                fd.mk_instructions_from_actions([fd.output(
+                platform.mk_uni_port_num(intf_id, onu_id))]))
+
+            self.add_flow_to_device(downstream_flow, downstream_logical_flow)
 
     def repush_all_different_flows(self):
         # Check if the device is supposed to have flows, if so add them
@@ -511,8 +519,10 @@ class OpenOltFlowMgr(object):
         for flow in flows:
             in_port = fd.get_in_port(flow)
             out_port = fd.get_out_port(flow)
-            #FIXME
-            if in_port == port and out_port == 128:
+
+            if in_port == port and \
+                platform.intf_id_to_port_type_name(out_port) == Port.ETHERNET_NNI:
+
                 fields = fd.get_ofb_fields(flow)
                 self.log.debug('subscriber flow found', fields=fields)
                 for field in fields:
