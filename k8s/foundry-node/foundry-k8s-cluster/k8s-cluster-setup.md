@@ -391,7 +391,7 @@ kubectl apply -f helm-role.yaml
 helm init --service-account tiller
 export HELM_HOME=/home/foundry/.helm
 helm repo add incubator https://kubernetes-charts-incubator.storage.googleapis.com/
-helm update
+helm repo update
 
 # Reset non-root user permissions back properly
 chown -R foundry:foundry /home/foundry
