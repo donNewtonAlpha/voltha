@@ -87,15 +87,6 @@ Give a non-root user ability to manage docker
 sudo usermod -aG docker <non-root-user>
 ```
 
-Add the k8s resolver into the top of the hosts resolver search list.  This is so kubectl svc names can be convienently resolved.  Dont get too used to this though as this setup will not be on the 3 server cluster. 
-The actual resolver will be installed below as part of kubernetes installation.  Also lower the timeout and attempts so the system default resolver is attempted quicker in the event the k8s resolver isnt responding.
-```
-sudo sh -c 'echo "nameserver 10.96.0.10" >> /etc/resolvconf/resolv.conf.d/head'
-sudo sh -c 'echo "options ndots:5 timeout:1 attempts:1" >> /etc/resolvconf/resolv.conf.d/base'
-sudo resolvconf -u
-```
-
-
 ## Intialize base k8s environment
 
 Disable swap. kubelet nor kubeadm will run with it.

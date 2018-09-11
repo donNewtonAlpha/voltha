@@ -46,6 +46,7 @@ from voltha.protos.bbf_fiber_multicast_gemport_body_pb2 import \
     MulticastGemportsConfigData
 from voltha.protos.bbf_fiber_multicast_distribution_set_body_pb2 import \
     MulticastDistributionSetData
+from voltha.protos.omci_mib_db_pb2 import MibDeviceData
 from voltha.protos.omci_alarm_db_pb2 import AlarmDeviceData
 
 log = structlog.get_logger()
@@ -1775,6 +1776,28 @@ class GlobalHandler(VolthaGlobalServiceServicer):
             context.set_details('Device \'{}\' error'.format(request.id))
             context.set_code(response.error_code)
             returnValue(AlarmDeviceData())
+        else:
+            log.debug('grpc-success-response', response=response)
+            returnValue(response)
+
+    @twisted_async
+    @inlineCallbacks
+    def SimulateAlarm(self, request, context):
+        try:
+            log.debug('grpc-request', request=request)
+            response = yield self.dispatcher.dispatch('SimulateAlarm',
+                                                      request,
+                                                      context,
+                                                      id=request.id)
+            log.debug('grpc-response', response=response)
+        except Exception as e:
+            log.exception('grpc-exception', e=e)
+
+        if isinstance(response, DispatchError):
+            log.warn('grpc-error-response', error=response.error_code)
+            context.set_details('Device \'{}\' error'.format(request.id))
+            context.set_code(response.error_code)
+            returnValue(OperationResp(code=OperationResp.OPERATION_FAILURE))
         else:
             log.debug('grpc-success-response', response=response)
             returnValue(response)

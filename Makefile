@@ -172,7 +172,7 @@ help:
 	@echo "containers   : Build all the docker containers"
 	@echo "base         : Build the base docker container used by all other dockers"
 	@echo "voltha       : Build the voltha docker container"
-	@echo "voltha_prod  : Build the voltha docker container with only openolt and brcm_openomci adapters"
+	@echo "voltha-prod  : Build the voltha docker container with only openolt and brcm_openomci adapters"
 	@echo "ofagent      : Build the ofagent docker container"
 	@echo "netconf      : Build the netconf docker container"
 	@echo "shovel       : Build the shovel docker container"
