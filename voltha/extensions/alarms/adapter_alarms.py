@@ -103,7 +103,8 @@ class AdapterAlarms:
                 state=alarm_data.get('state'),
                 raised_ts=alarm_data.get('ts', 0),
                 context=current_context,
-                logical_device_id=self.logical_device_id
+                logical_device_id=self.logical_device_id,
+                alarm_type_name=self.alarm
             )
             self.adapter_agent.submit_alarm(self.device_id, alarm_event)
 
