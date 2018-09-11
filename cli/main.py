@@ -57,9 +57,7 @@ banner = """\
 __ _____| | |_| |_  __ _   / __| |  |_ _|
 \ V / _ \ |  _| ' \/ _` | | (__| |__ | |
  \_/\___/_|\__|_||_\__,_|  \___|____|___|
-msz 1.1.10  (to exit type quit or hit Ctrl-D)
-Adds gen_alarm call, 
-set logical_device_id = none on device delete
+(to exit type quit or hit Ctrl-D)
 """
 
 
@@ -69,7 +67,7 @@ class VolthaCli(Cmd):
 
     # Settable CLI parameters
     voltha_grpc = 'localhost:50055'
-    voltha_sim_rest = 'vcore.voltha.svc.cluster.local:18880'
+    voltha_sim_rest = 'localhost:18880'
     global_request = False
     max_history_lines = 500
     default_device_id = None
@@ -192,7 +190,7 @@ class VolthaCli(Cmd):
             'hardware_version',
             'images',
             'firmware_version',
-            'serial_number'
+            'vendor_id'
         }
         print_pb_list_as_table('Devices:', devices, omit_fields, self.poutput)
 
@@ -208,8 +206,11 @@ class VolthaCli(Cmd):
             'desc.serial_number',
             'switch_features.capabilities'
         }
+        presfns = {
+            'datapath_id': lambda x: "{0:0{1}x}".format(int(x), 16)
+        }
         print_pb_list_as_table('Logical devices:', res.items, omit_fields,
-                               self.poutput)
+                               self.poutput, presfns=presfns)
 
     def do_device(self, line):
         """Enter device level command mode"""
@@ -294,6 +295,12 @@ class VolthaCli(Cmd):
         from pdb import set_trace
         set_trace()
 
+    def do_version(self, line):
+        """Show the VOLTHA core version"""
+        stub = self.get_stub()
+        voltha = stub.GetVoltha(Empty())
+        self.poutput('{}'.format(voltha.version))
+
     def do_health(self, line):
         """Show connectivity status to Voltha status"""
         stub = voltha_pb2.HealthServiceStub(self.get_channel())
@@ -308,10 +315,6 @@ class VolthaCli(Cmd):
         make_option('-i', '--ip-address', action='store', dest='ip_address'),
         make_option('-H', '--host_and_port', action='store',
                     dest='host_and_port'),
-        make_option('-e', '--enable', action='store',
-                    help="Allows enable and provision. true/false",default="false",
-                    dest='enable_device'),
-
     ])
     def do_preprovision_olt(self, line, opts):
         """Preprovision a new OLT with given device type"""
@@ -322,7 +325,7 @@ class VolthaCli(Cmd):
         elif opts.ip_address:
             kw['ipv4_address'] = opts.ip_address
         elif opts.mac_address:
-            kw['mac_address'] = opts.mac_address
+            kw['mac_address'] = opts.mac_address.lower()
         else:
             raise Exception('Either IP address or Mac Address is needed')
         # Pass any extra arguments past '--' to the device as custom arguments
@@ -332,10 +335,6 @@ class VolthaCli(Cmd):
         device = stub.CreateDevice(device)
         self.poutput('success (device id = {})'.format(device.id))
         self.default_device_id = device.id
-        # added 20180627
-        if opts.enable_device == "true":
-            self.do_enable(device.id)
-            self.poutput('success (device id = {}) - enabled'.format(device.id))
 
     def do_enable(self, line):
         """
@@ -343,12 +342,12 @@ class VolthaCli(Cmd):
         pre-provisioned device.
         """
         device_id = line or self.default_device_id
-        self.poutput('enabling {}'.format(device_id))
+        if device_id not in self.device_ids():
+            self.poutput('Error: There is no such preprovisioned device')
+            return
+
         try:
             stub = self.get_stub()
-<<<<<<< HEAD
-            stub.EnableDevice(voltha_pb2.ID(id=device_id))
-=======
             device = stub.GetDevice(voltha_pb2.ID(id=device_id))
             if device.admin_state == voltha_pb2.AdminState.ENABLED:
                 if device.oper_status != voltha_pb2.OperStatus.ACTIVATING:
@@ -357,31 +356,21 @@ class VolthaCli(Cmd):
             else:
                 stub.EnableDevice(voltha_pb2.ID(id=device_id))
                 self.poutput('enabling {}'.format(device_id))
->>>>>>> master
 
             while True:
                 device = stub.GetDevice(voltha_pb2.ID(id=device_id))
                 # If this is an OLT then acquire logical device id
-
                 if device.oper_status == voltha_pb2.OperStatus.ACTIVE:
-                    self.poutput('Operational status is now active for device id = {})'.format(device.id))
-                    self.poutput('Device type = )'.format(device.type))
                     if device.type.endswith('_olt'):
                         assert device.parent_id
                         self.default_logical_device_id = device.parent_id
-
+                        self.poutput('success (logical device id = {})'.format(
+                            self.default_logical_device_id))
                     else:
                         self.poutput('success (device id = {})'.format(device.id))
-
-                    self.poutput('success (parent device id = {})'.format(
-                        str(device.parent_id)))
-                    self.poutput('success (logical device id = {})'.format(
-                        self.default_logical_device_id))
                     break
-                self.poutput('waiting for device to be enabled ....')
-                # self.poutput('device oper_status value = {}'.format(str(device.oper_status)))
-                # sleep(.5)
-                sleep(1)
+                self.poutput('waiting for device to be enabled...')
+                sleep(.5)
         except Exception as e:
             self.poutput('Error enabling {}.  Error:{}'.format(device_id, e))
 
@@ -424,48 +413,31 @@ class VolthaCli(Cmd):
             stub = self.get_stub()
             stub.DeleteDevice(voltha_pb2.ID(id=device_id))
             self.poutput('deleted {}'.format(device_id))
-            # self.poutput('Setting logical_device_id to NONE {}'.format(self.default_logical_device_id))
-            # self.default_logical_device_id = None
-            # self.poutput('logical_device_id set to NONE')
-
         except Exception as e:
             self.poutput('Error deleting {}.  Error:{}'.format(device_id, e))
 
-    """   Added 20180627
-            To allow disable to cascade to deletion.
-    """
-    @options([
-        make_option('-d', '--delete', action="store", dest='delete_device',
-                    help="Allow disable and delete.  true/false.  Default is false",
-                    default='false'),
-
-    ])
-    def do_disable(self, line, opts):
+    def do_disable(self, line):
         """
         Disable a device. ID of the device needs to be provided
-        20180627 -- added options to allow for disable to be followed hy deletion...
         """
         device_id = line
-        self.poutput('disabling {}'.format(device_id))
+        if device_id not in self.device_ids():
+            self.poutput('Error: There is no such device')
+            return
         try:
             stub = self.get_stub()
+            device = stub.GetDevice(voltha_pb2.ID(id=device_id))
+            if device.admin_state == voltha_pb2.AdminState.DISABLED:
+                self.poutput('Error: Device is already disabled')
+                return
             stub.DisableDevice(voltha_pb2.ID(id=device_id))
+            self.poutput('disabling {}'.format(device_id))
 
             # Do device query and verify that the device admin status is
             # DISABLED and Operational Status is unknown
             device = stub.GetDevice(voltha_pb2.ID(id=device_id))
-            self.poutput('Disabling: Collected device.id  {}  for current device_id {}'.format(str(device.id), device_id))
             if device.admin_state == voltha_pb2.AdminState.DISABLED:
                 self.poutput('disabled successfully {}'.format(device_id))
-
-                # if it succeeds check for deletion request...
-                # added 20180627
-                if opts.delete_device == "true":
-                    self.do_delete(device.id)
-                    self.poutput('deleted successfully {}'.format(device_id))
-                    # self.poutput('Setting logical_device_id to NONE {}'.format(self.default_logical_device_id))
-                    # self.default_logical_device_id = None
-                    # self.poutput('logical_device_id set to NONE')
             else:
                 self.poutput('disabling failed {}.  Admin State:{} '
                              'Operation State: {}'.format(device_id,
@@ -888,216 +860,8 @@ class TestCli(VolthaCli):
         """
         pass
 
-    def do_kafka_send_test(self, line):
-        """
-        Send an echo of the line
-        """
-        self.poutput('success : ' + str(line))
-        self.poutput('line1 : ' + str(line))
-
-        self.poutput('success : ' + self.voltha_sim_rest)
-        r = requests.get('http://{}/kafka_test'.format(
-            'vcore.voltha.svc.cluster.local:18880'
-        ))
-
-        self.poutput('text : ' + r.text)
-        self.poutput('json : ' + r.json())
-
-
-    def do_kafka_send_event(self, line):
-        """
-        This endpoint will request a specific kafka event to be fired.
-        """
-
-        self.poutput('args : ' + str(line))
-        self.poutput('success : ' + self.voltha_sim_rest)
-
-        r = requests.get('http://{}/kafka/send_kafka_event'.format(
-            'vcore.voltha.svc.cluster.local:18880'
-        ))
-
-
-        self.poutput('text : ' + r.text)
-        self.poutput('json : ' + r.json())
-
-    def do_generate_alarm(self, line):
-        """
-        End point to display the enumerated  alarm states
-        """
-        try:
-            linekeys = ["deviceid","interfaceid","alarmtype","onu_id", "status"]
-
-
-            targUrl = "not_initialized"
-            if line.strip() == "":
-                out = []
-                out.append("This test method generates an alarm that is passed to kafka via the simulated_olt" )
-                out.append("The line is structured in the form:")
-                out.append("\t deviceid={value}")
-                out.append("\t InterfaceID={value}")
-                out.append("\t Alarmtype={LOS|DG|SLOS (subscriber loss of signal)")
-                out.append("\t onu_id={value} ")
-                out.append("\t status={value} (raised | cleared")
-                out.append("Use comma as separator.")
-                if self.default_device_id == None:
-                    out.append("Example: generate_alarm deviceid=12345, interfaceid=12345, alarmtype=los", \
-                               "onu_id=1234", "status=raised")
-                else:
-                    out.append("Example: generate_alarm deviceid=" + self.default_device_id + ", interfaceid=12345, alarmtype=los,onu_id=1234, status=raised")
-
-                out.append("Current device_id = " + self.get_current_device())
-                # out.append("xxxx")
-                for i in out:
-                 self.poutput(i)
-            else:
-                success, errstr, qrystr = self.validate_line(linekeys,line)
-                if success:
-                    targUrl = 'http://{}/generate_alarm$QRYSTR$'.format('vcore.voltha.svc.cluster.local:18880').replace('$QRYSTR$', qrystr)
-                    self.poutput("calling generate_alarm. URL = " + targUrl)
-                    r = requests.get(targUrl)
-                    self.poutput('text : ' + r.text)
-                    # self.poutput('json : ' + str(r.json()))
-                else:
-                    self.poutput("Query validation eturned False with error = " + errstr)
-
-        except Exception as e:
-            self.poutput('returned with exception...' + str(e.message) + "   Target url = " + targUrl)
-
-
-    def do_alarmsim_disable(self, line):
-        """
-        Sends a message to the simulated_olt to disable simulated alarms
-        The disabling will take effect on the next preprovisioning of the
-        simulated olt
-        """
-        try:
-            targUrl = 'http://{}/disable_alarm_sim'.format('vcore.voltha.svc.cluster.local:18880')
-            r = requests.get(targUrl)
-            self.poutput('text : ' + r.text)
-        except Exception as e:
-            self.poutput('returned with exception...' + str(e.message) + "   Target url = " + targUrl)
-
-    def do_alarmsim_enable(self, line):
-        """
-        Sends a message to the simulated_olt to enable simulated alarms
-        The disabling will take effect on the next preprovisioning of the
-        simulated olt
-        """
-        try:
-            targUrl = 'http://{}/enable_alarm_sim'.format('vcore.voltha.svc.cluster.local:18880')
-            r = requests.get(targUrl)
-            self.poutput('text : ' + r.text)
-        except Exception as e:
-            self.poutput('returned with exception...' + str(e.message) + "   Target url = " + targUrl)
-
-    def do_show_default_device(self, line):
-        """
-        EThis displays the current default device value.
-        If the value is found to be NONE then the value should be set using
-        set_default_device.  The the generics set command does not prperly set
-        the value....
-
-        """
-        try:
-            curDevId = self.get_current_device()
-            if not curDevId == None:
-                self.poutput("Current device_id = " + curDevId)
-            else:
-                self.poutput("Current default device not set. (== NONE)")
-
-
-        except Exception as e:
-            self.poutput('returned with exception...' + str(e.message))
-
-    def do_set_default_device(self, line):
-        """
-        This will set the current default device value per the value passed.
-        No checking of type is done.   It is assumed that the value is a string.
-        """
-        try:
-            if line.strip() == "":
-                self.poutput("Now device value passed please retry with a value.")
-            else:
-                self.default_device_id = line.strip()
-                self.poutput("Current device_id set to " + self.default_device_id)
-        except Exception as e:
-            self.poutput('returned with exception...' + str(e.message))
-
-    def do_get_alarmstate_enums(self, line):
-        """
-        End point to display the enumerated  alarm states
-        """
-        try:
-            r = requests.get('http://{}/get_alarmstate_enums'.format(
-                'vcore.voltha.svc.cluster.local:18880'
-            ))
-            self.poutput('text : ' + r.text)
-            self.poutput('json : ' + str(r.json()))
-        except Exception as e:
-            self.poutput('returned with exception...' + str(e.message))
-    # complete_get_alarmstate_enums = VolthaCli.complete_device
-
-
-    def validate_line(self, linekeys, line):
-        try:
-            retstr = "succeeded"
-            qrystr = ""
-            splitarray = line.split(",")
-            i = 0
-            for l in splitarray:
-                i += 1
-                targ = l.strip().split('=')
-                if targ[0] not in linekeys:
-                    retstr = "Error parsing line " + l + " not present in set."
-                    break
-                else:
-                    if qrystr  == "":
-                        qrystr = "?" + targ[0] + "=" + targ[1]
-                    else:
-                        qrystr += "&" + targ[0] + "=" + targ[1]
-            if retstr == "succeeded":
-                #
-                foo = True
-            else:
-                retstr += ".   failed"
-                pass
-
-
-
-
-        except Exception as e:
-            retstr = ' caught returned with exception...' + str(e.message)
-            self.poutput('returned with exception...' + str(e.message))
-        if retstr != "succeeded":
-            return False, retstr, qrystr
-        else:
-            return True, retstr, qrystr
-
-
-    """
-    Helper methods added 20180625
-    
-    """
-
-    def get_current_device(self):
-    # This is really a place holder
-        return self.default_device_id
-
-
-    """
-  END Helper methods added 20180625
-"""
-
 
 if __name__ == '__main__':
-
-    # import pydevd
-
-    try:
-        # pydevd.settrace('10.64.10.181', port=4450, stdoutToServer=True, stderrToServer=True)
-        pass
-    except Exception as err:
-        pass    # just ignore this since there isnt a listner on the other end.
 
     parser = argparse.ArgumentParser()
 
