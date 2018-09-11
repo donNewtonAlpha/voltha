@@ -178,19 +178,7 @@ class OpenoltDevice(object):
             self.indications_thread_handle.setDaemon(True)
             self.indications_thread_handle.start()
         except Exception as e:
-<<<<<<< HEAD
-            self.log.exception('do_state_init failed', e=e)
-
-        self.alarm_mgr = OpenOltAlarmMgr(self.log, self.adapter_agent,
-                                         self.device_id,
-                                         self.logical_device_id)
-        self.stats_mgr = OpenOltStatisticsMgr(self, self.log)
-        self.bw_mgr = OpenOltBW(self.log, self.proxy)
-
-        self.log.info('openolt-device-created', device_id=self.device_id)
-=======
             self.log.exception('post_init failed', e=e)
->>>>>>> master
 
     def do_state_connected(self, event):
         self.log.debug("do_state_connected")
@@ -1096,9 +1084,6 @@ class OpenoltDevice(object):
                            error=e)
         else:
             self.log.info('statistics requested')
-<<<<<<< HEAD
-=======
 
     def simulate_alarm(self, alarm):
         self.alarm_mgr.simulate_alarm(alarm)
->>>>>>> master
