@@ -36,7 +36,7 @@ spec:
     spec:
       containers:
         - name: voltha
-          image: docker-repo.dev.atl.foundry.att.com:5000/voltha-voltha:gold-candidate
+          image: docker-repo.dev.atl.foundry.att.com:5000/voltha-voltha_prod:gold.9.11
           env:
             - name: NAMESPACE
               valueFrom:
