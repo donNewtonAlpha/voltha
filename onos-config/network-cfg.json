@@ -2,7 +2,7 @@
   "devices" : {
     "of:000000000a4001cd" : {
       "accessDevice" : {
-        "uplink" : "128",
+        "uplink" : "65536",
         "vlan" : "10"
       },
       "basic" : {
@@ -14,7 +14,7 @@
         "driver" : "pmc-olt"
       },
       "accessDevice" : {
-        "uplink" : "128",
+        "uplink" : "65536",
         "vlan" : "11"
       }
     },
@@ -23,7 +23,7 @@
         "driver" : "pmc-olt"
       },
       "accessDevice" : {
-        "uplink" : "128",
+        "uplink" : "65536",
         "vlan" : "12"
       }
     },
@@ -32,7 +32,7 @@
         "driver" : "pmc-olt"
       },
       "accessDevice" : {
-        "uplink" : "128",
+        "uplink" : "65536",
         "vlan" : "10"
       }
     }
@@ -64,19 +64,19 @@
         },
         "entries" : [ {
          "id" : "10.64.1.205:9191",
-          "uplinkPort" : 128,
+          "uplinkPort" : 65536,
           "hardwareIdentifier" : "a8:2b:b5:36:76:9e",
           "ipAddress" : "10.64.1.205",
           "nasId" : "ATLEDGEVOLT1"
         }, {
           "id" : "10.64.1.206:9191",
-          "uplinkPort" : 128,
+          "uplinkPort" : 65536,
           "hardwareIdentifier" : "a8:2b:b5:36:78:ae",
           "ipAddress" : "10.64.1.206",
           "nasId" : "ATLEDGEVOLT1"
         }, {
           "id" : "10.64.1.207:9191",
-          "uplinkPort" : 128,
+          "uplinkPort" : 65536,
           "hardwareIdentifier" : "3c:2c:99:f7:c6:82",
           "ipAddress" : "10.64.1.207",
           "nasId" : "ATLEDGEVOLT1"
