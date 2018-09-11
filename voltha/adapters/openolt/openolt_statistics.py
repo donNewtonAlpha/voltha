@@ -13,15 +13,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-from voltha.protos.events_pb2 import KpiEvent, MetricValuePairs
-from voltha.protos.events_pb2 import KpiEventType
-import voltha.adapters.openolt.openolt_platform as platform
+# from voltha.protos.events_pb2 import KpiEvent, MetricValuePairs
+# from voltha.protos.events_pb2 import KpiEventType
+# import voltha.adapters.openolt.openolt_platform as platform
+
+# from voltha.adapters.openolt.nni_port import NniPort
+# from voltha.adapters.openolt.pon_port import PonPort
+# from voltha.protos.device_pb2 import Port
+
+from twisted.internet import reactor, defer
 from voltha.extensions.kpi.olt.olt_pm_metrics import OltPmMetrics
 from voltha.protos.device_pb2 import PmConfig, PmConfigs, PmGroupConfig
-from voltha.adapters.openolt.nni_port import NniPort
-from voltha.adapters.openolt.pon_port import PonPort
-from voltha.protos.device_pb2 import Port
-from twisted.internet import reactor, defer
 
 
 class OpenOltStatisticsMgr(object):
@@ -88,7 +90,8 @@ class OpenOltStatisticsMgr(object):
         #
         #
         # #FIXME : only the first uplink is a logical port
-        # if port_stats.intf_id == 128:
+        # if platform.intf_id_to_port_type_name(port_stats.intf_id) ==
+        #   Port.ETHERNET_NNI:
         #     # ONOS update
         #     self.update_logical_port_stats(port_stats)
         # # FIXME: Discard other uplinks, they do not exist as an object
@@ -236,7 +239,6 @@ class OpenOltStatisticsMgr(object):
 
             ('admin_state', PmConfig.STATE),
             ('oper_status', PmConfig.STATE),
-            ('intf_id', PmConfig.STATE),
             ('port_no', PmConfig.GAUGE),
             ('rx_bytes', PmConfig.COUNTER),
             ('rx_packets', PmConfig.COUNTER),
@@ -276,7 +278,6 @@ class OpenOltStatisticsMgr(object):
 
         # pon_names uses same structure as nmi_names with the addition of pon_id to context
         pon_pm_names = {
-            ('intf_id', PmConfig.CONTEXT),  # Physical device port number (PON)
             ('pon_id', PmConfig.CONTEXT),  # PON ID (0..n)
             ('port_no', PmConfig.CONTEXT),
 
@@ -376,7 +377,14 @@ class OpenOltStatisticsMgr(object):
             raise Exception(err)
 
     def build_port_object(self, port_num, type="nni"):
+        """
+        Seperate method to allow for updating north and southbound ports
+        newly discovered ports and devices
 
+        :param port_num:
+        :param type:
+        :return:
+        """
         try:
             """ 
              This builds a port object which is added to the 
@@ -389,9 +397,8 @@ class OpenOltStatisticsMgr(object):
                     "device_id": self.device.device_id
                 }
                 nni_port = NniPort
-                port = nni_port(**kwargs)
+                port = nni_port( **kwargs)
                 return port
-
             elif type == "pon":
                 # PON ports require a different configuration
                 #  intf_id and pon_id are currently equal.
@@ -442,3 +449,156 @@ class OpenOltStatisticsMgr(object):
         except Exception as err:
             self.log.exception("Caught error updating port data: ", cur_attr=cur_attr, errormsg=err.message)
             raise Exception(err)
+
+
+class PonPort(object):
+    """
+    This is a highly reduced version taken from the adtran pon_port.
+    TODO: Extend for use in the openolt adapter set.
+    """
+    MAX_ONUS_SUPPORTED = 256
+    DEFAULT_ENABLED = False
+    MAX_DEPLOYMENT_RANGE = 25000  # Meters (OLT-PB maximum)
+
+    _MCAST_ONU_ID = 253
+    _MCAST_ALLOC_BASE = 0x500
+
+    _SUPPORTED_ACTIVATION_METHODS = ['autodiscovery']  # , 'autoactivate']
+    _SUPPORTED_AUTHENTICATION_METHODS = ['serial-number']
+
+    def __init__(self, **kwargs):
+        assert 'pon-id' in kwargs, 'PON ID not found'
+
+        self._pon_id = kwargs['pon-id']
+        self._device_id = kwargs['device_id']
+        self._intf_id = kwargs['intf_id']
+        self._port_no = kwargs['port_no']
+        self._port_id = 0
+        # self._name = 'xpon 0/{}'.format(self._pon_id+1)
+        self._label = 'pon-{}'.format(self._pon_id)
+
+        self._onus = {}  # serial_number-base64 -> ONU  (allowed list)
+        self._onu_by_id = {}  # onu-id -> ONU
+
+        """
+        Statistics  taken from nni_port
+        self.intf_id = 0  #handled by getter
+        self.port_no = 0  #handled by getter
+        self.port_id = 0  #handled by getter  
+
+        Note:  In the current implementation of the kpis coming from the BAL the stats are the
+        samne model for NNI and PON.
+
+        TODO:   Integrate additional kpis for the PON and other southbound port objecgts.      
+
+        """
+
+        self.rx_bytes = 0
+        self.rx_packets = 0
+        self.rx_mcast_packets = 0
+        self.rx_bcast_packets = 0
+        self.rx_error_packets = 0
+        self.tx_bytes = 0
+        self.tx_packets = 0
+        self.tx_ucast_packets = 0
+        self.tx_mcast_packets = 0
+        self.tx_bcast_packets = 0
+        self.tx_error_packets = 0
+        return
+
+    def __str__(self):
+        return "PonPort-{}: Admin: {}, Oper: {}, OLT: {}".format(self._label,
+                                                                 self._admin_state,
+                                                                 self._oper_status,
+                                                                 self.olt)
+
+    @property
+    def intf_id(self):
+        return self._intf_id
+
+    @intf_id.setter
+    def intf_id(self, value):
+        self._intf_id = value
+
+    @property
+    def pon_id(self):
+        return self._pon_id
+
+    @pon_id.setter
+    def pon_id(self, value):
+        self._pon_id = value
+
+    @property
+    def port_no(self):
+        return self._port_no
+
+    @port_no.setter
+    def port_no(self, value):
+        self._port_no = value
+
+    @property
+    def port_id(self):
+        return self._port_id
+
+    @intf_id.setter
+    def port_id(self, value):
+        self._port_id = value
+
+    @property
+    def onus(self):
+        """
+        Get a set of all ONUs.  While the set is immutable, do not use this method
+        to get a collection that you will iterate through that my yield the CPU
+        such as inline callback.  ONUs may be deleted at any time and they will
+        set some references to other objects to NULL during the 'delete' call.
+        Instead, get a list of ONU-IDs and iterate on these and call the 'onu'
+        method below (which will return 'None' if the ONU has been deleted.
+
+        :return: (frozenset) collection of ONU objects on this PON
+        """
+        return frozenset(self._onus.values())
+
+    @property
+    def onu_ids(self):
+        return frozenset(self._onu_by_id.keys())
+
+    def onu(self, onu_id):
+        return self._onu_by_id.get(onu_id)
+
+
+class NniPort(object):
+    """
+    Northbound network port, often Ethernet-based
+
+    This is a highly reduced version taken from the adtran nni_port code set
+    TODO:   add functions to allow for port specific values and operations
+
+    """
+    def __init__(self, **kwargs):
+        # TODO: Extend for use in the openolt adapter set.
+        self.port_no = kwargs.get('port_no')
+        self._port_no = self.port_no
+        self._name = kwargs.get('name', 'nni-{}'.format(self._port_no))
+        self._logical_port = None
+
+        # Statistics
+        self.intf_id = kwargs.pop('intf_id', None)
+        self.port_no = 0
+        self.rx_bytes = 0
+        self.rx_packets = 0
+        self.rx_mcast_packets = 0
+        self.rx_bcast_packets = 0
+        self.rx_error_packets = 0
+        self.tx_bytes = 0
+        self.tx_packets = 0
+        self.tx_ucast_packets = 0
+        self.tx_mcast_packets = 0
+        self.tx_bcast_packets = 0
+        self.tx_error_packets = 0
+        return
+
+    def __str__(self):
+        return "NniPort-{}: Admin: {}, Oper: {}, parent: {}".format(self._port_no,
+                                                                    self._admin_state,
+                                                                    self._oper_status,
+                                                                    self._parent)
