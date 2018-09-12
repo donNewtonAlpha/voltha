@@ -147,7 +147,7 @@ class LocalHandler(VolthaLocalServiceServicer):
 
         for logical_device in logical_devices:
             device = self.root.get('/devices/{}'.format(
-                logical_devices.root_device_id))
+                logical_device.root_device_id))
             if device is not None and device.connect_status == \
                     ConnectStatus.REACHABLE:
                 reachable_logical_devices.append(logical_device)
