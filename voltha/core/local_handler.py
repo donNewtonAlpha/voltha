@@ -140,7 +140,7 @@ class LocalHandler(VolthaLocalServiceServicer):
         return LogicalDevices(items=items)
 
     @twisted_async
-    def ListLogicalDevices(self, request, context):
+    def ListReachableLogicalDevices(self, request, context):
         log.debug('grpc-request', request=request)
         logical_devices = self.root.get('/logical_devices')
         reachable_logical_devices = []
