@@ -340,7 +340,7 @@ class PerformanceIntervals(object):
         config = self._device.configuration
 
         for pon in config.ani_g_entities:
-            if pon is None:
+            if pon is None or 'entity-id' not in pon:
                 continue
             entity_id = pon['entity-id']
             self.delete_pm_me(FecPerformanceMonitoringHistoryData.class_id, entity_id)
