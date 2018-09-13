@@ -20,6 +20,7 @@ import grpc
 from voltha.protos.openflow_13_pb2 import OFPXMC_OPENFLOW_BASIC, \
     ofp_flow_stats, OFPMT_OXM, Flows, FlowGroups, OFPXMT_OFB_IN_PORT, \
     OFPXMT_OFB_VLAN_VID
+from voltha.protos.device_pb2 import Port
 import voltha.core.flow_decomposer as fd
 import openolt_platform as platform
 from voltha.adapters.openolt.protos import openolt_pb2
