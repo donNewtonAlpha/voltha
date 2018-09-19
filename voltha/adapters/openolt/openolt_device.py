@@ -149,17 +149,24 @@ class OpenoltDevice(object):
         self.go_state_init()
 
     def do_state_init(self, event):
-        # Initialize gRPC
-        self.channel = grpc.insecure_channel(self.host_and_port)
-        self.channel_ready_future = grpc.channel_ready_future(self.channel)
+        """
+        Initialize gRPC
+        Added try/catch
 
-        self.alarm_mgr = OpenOltAlarmMgr(self.log, self.adapter_agent,
-                                         self.device_id,
-                                         self.logical_device_id)
-        self.stats_mgr = OpenOltStatisticsMgr(self, self.log)
-        self.bw_mgr = OpenOltBW(self.log, self.proxy)
+        """
+        try:
+            self.channel = grpc.insecure_channel(self.host_and_port)
+            self.channel_ready_future = grpc.channel_ready_future(self.channel)
 
-        self.log.info('openolt-device-created', device_id=self.device_id)
+            self.alarm_mgr = OpenOltAlarmMgr(self.log, self.adapter_agent,
+                                             self.device_id,
+                                             self.logical_device_id)
+            self.stats_mgr = OpenOltStatisticsMgr(self, self.log)
+            self.bw_mgr = OpenOltBW(self.log, self.proxy)
+
+            self.log.info('openolt-device-created', device_id=self.device_id)
+        except Exception as e:
+            self.log.exception('do_state_init failed', e=e)
 
     def post_init(self, event):
         self.log.debug('post_init')
@@ -181,29 +188,36 @@ class OpenoltDevice(object):
             self.log.exception('post_init failed', e=e)
 
     def do_state_connected(self, event):
-        self.log.debug("do_state_connected")
+        """
+        Added try/except
 
-        device = self.adapter_agent.get_device(self.device_id)
+        """
+        try:
+            self.log.debug("do_state_connected")
 
-        self.stub = openolt_pb2_grpc.OpenoltStub(self.channel)
+            device = self.adapter_agent.get_device(self.device_id)
 
-        device_info = self.stub.GetDeviceInfo(openolt_pb2.Empty())
-        self.log.info('Device connected', device_info=device_info)
+            self.stub = openolt_pb2_grpc.OpenoltStub(self.channel)
 
-        device.vendor = device_info.vendor
-        device.model = device_info.model
-        device.hardware_version = device_info.hardware_version
-        device.firmware_version = device_info.firmware_version
+            device_info = self.stub.GetDeviceInfo(openolt_pb2.Empty())
+            self.log.info('Device connected', device_info=device_info)
 
-        self.flow_mgr = OpenOltFlowMgr(self.log, self.stub, self.device_id,
-                                       self.logical_device_id)
+            device.vendor = device_info.vendor
+            device.model = device_info.model
+            device.hardware_version = device_info.hardware_version
+            device.firmware_version = device_info.firmware_version
 
-        # TODO: use content of device_info for Resource manager (VOL-948)
+            self.flow_mgr = OpenOltFlowMgr(self.log, self.stub, self.device_id,
+                                           self.logical_device_id)
 
-        # TODO: check for uptime and reboot if too long (VOL-1192)
+            # TODO: use content of device_info for Resource manager (VOL-948)
 
-        device.connect_status = ConnectStatus.REACHABLE
-        self.adapter_agent.update_device(device)
+            # TODO: check for uptime and reboot if too long (VOL-1192)
+
+            device.connect_status = ConnectStatus.REACHABLE
+            self.adapter_agent.update_device(device)
+        except Exception as e:
+            self.log.exception('do_state_connected failed', e=e)
 
     def do_state_up(self, event):
         self.log.debug("do_state_up")

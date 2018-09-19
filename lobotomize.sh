@@ -1,6 +1,6 @@
 #!/bin/bash
 
-srcpath=~/source/voltha/
+srcpath=~/source/foundry_source/voltha_foundry_test/
 
 #Stop containers
 kubectl delete -f $srcpath/k8s/foundry-node/
@@ -22,7 +22,8 @@ kubectl apply -f $srcpath/k8s/foundry-node/zookeeper_persist.yml
 kubectl apply -f $srcpath/k8s/foundry-node/kafka_persist.yml
 kubectl apply -f $srcpath/k8s/foundry-node/etcd_persist.yml
 kubectl apply -f $srcpath/k8s/foundry-node/fluentd.yml
-kubectl apply -f $srcpath/k8s/foundry-node/vcore_for_etcd_repo.yml
+#kubectl apply -f $srcpath/k8s/foundry-node/vcore_for_etcd_repo.yml
+kubectl apply -f $srcpath/k8s/foundry-node/vcore_for_etcd_repo_msz.yml
 kubectl apply -f $srcpath/k8s/foundry-node/ofagent_repo.yml
 kubectl apply -f $srcpath/k8s/foundry-node/envoy_for_etcd_repo.yml
 kubectl apply -f $srcpath/k8s/foundry-node/vcli_repo.yml
