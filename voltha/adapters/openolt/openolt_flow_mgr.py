@@ -32,6 +32,7 @@ DHCP_DOWNLINK_FLOW_INDEX = 6  # FIXME
 EAPOL_FLOW_INDEX = 2  # FIXME
 EAPOL_SECONDARY_FLOW_INDEX = 5  # FIXME
 LLDP_FLOW_ID = 0x3FF8  # FIXME (16376)
+DOWNSTREAM_FLOW = 7
 
 EAP_ETH_TYPE = 0x888e
 LLDP_ETH_TYPE = 0x88cc
@@ -428,7 +429,7 @@ class OpenOltFlowMgr(object):
             downlink_action[VLAN_VID] = vlan_id
 
             downlink_flow_id = platform.mk_flow_id(intf_id, onu_id,
-                                                   eapol_id)
+                                                   DOWNSTREAM_FLOW)
 
             downstream_flow = openolt_pb2.Flow(
                 onu_id=onu_id, flow_id=downlink_flow_id, flow_type=DOWNSTREAM,
