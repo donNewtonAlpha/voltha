@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-
+import sys
 import threading
 import binascii
 import grpc
@@ -96,6 +96,7 @@ class OpenoltDevice(object):
         is_reconciliation = kwargs.get('reconciliation', False)
         self.device_id = device.id
         self.host_and_port = device.host_and_port
+        self.extra_args = device.extra_args
         self.log = structlog.get_logger(id=self.device_id,
                                         ip=self.host_and_port)
         self.proxy = registry('core').get_proxy('/')
@@ -149,24 +150,17 @@ class OpenoltDevice(object):
         self.go_state_init()
 
     def do_state_init(self, event):
-        """
-        Initialize gRPC
-        Added try/catch
+        # Initialize gRPC
+        self.channel = grpc.insecure_channel(self.host_and_port)
+        self.channel_ready_future = grpc.channel_ready_future(self.channel)
 
-        """
-        try:
-            self.channel = grpc.insecure_channel(self.host_and_port)
-            self.channel_ready_future = grpc.channel_ready_future(self.channel)
+        self.alarm_mgr = OpenOltAlarmMgr(self.log, self.adapter_agent,
+                                         self.device_id,
+                                         self.logical_device_id)
+        self.stats_mgr = OpenOltStatisticsMgr(self, self.log)
+        self.bw_mgr = OpenOltBW(self.log, self.proxy)
 
-            self.alarm_mgr = OpenOltAlarmMgr(self.log, self.adapter_agent,
-                                             self.device_id,
-                                             self.logical_device_id)
-            self.stats_mgr = OpenOltStatisticsMgr(self, self.log)
-            self.bw_mgr = OpenOltBW(self.log, self.proxy)
-
-            self.log.info('openolt-device-created', device_id=self.device_id)
-        except Exception as e:
-            self.log.exception('do_state_init failed', e=e)
+        self.log.info('openolt-device-created', device_id=self.device_id)
 
     def post_init(self, event):
         self.log.debug('post_init')
@@ -188,36 +182,27 @@ class OpenoltDevice(object):
             self.log.exception('post_init failed', e=e)
 
     def do_state_connected(self, event):
-        """
-        Added try/except
+        self.log.debug("do_state_connected")
 
-        """
-        try:
-            self.log.debug("do_state_connected")
+        device = self.adapter_agent.get_device(self.device_id)
 
-            device = self.adapter_agent.get_device(self.device_id)
+        self.stub = openolt_pb2_grpc.OpenoltStub(self.channel)
 
-            self.stub = openolt_pb2_grpc.OpenoltStub(self.channel)
+        device_info = self.stub.GetDeviceInfo(openolt_pb2.Empty())
+        self.log.info('Device connected', device_info=device_info)
 
-            device_info = self.stub.GetDeviceInfo(openolt_pb2.Empty())
-            self.log.info('Device connected', device_info=device_info)
+        device.vendor = device_info.vendor
+        device.model = device_info.model
+        device.hardware_version = device_info.hardware_version
+        device.firmware_version = device_info.firmware_version
 
-            device.vendor = device_info.vendor
-            device.model = device_info.model
-            device.hardware_version = device_info.hardware_version
-            device.firmware_version = device_info.firmware_version
+        self.flow_mgr = OpenOltFlowMgr(self.log, self.stub, self.device_id,
+                                       self.logical_device_id)
 
-            self.flow_mgr = OpenOltFlowMgr(self.log, self.stub, self.device_id,
-                                           self.logical_device_id)
+        # TODO: check for uptime and reboot if too long (VOL-1192)
 
-            # TODO: use content of device_info for Resource manager (VOL-948)
-
-            # TODO: check for uptime and reboot if too long (VOL-1192)
-
-            device.connect_status = ConnectStatus.REACHABLE
-            self.adapter_agent.update_device(device)
-        except Exception as e:
-            self.log.exception('do_state_connected failed', e=e)
+        device.connect_status = ConnectStatus.REACHABLE
+        self.adapter_agent.update_device(device)
 
     def do_state_up(self, event):
         self.log.debug("do_state_up")
@@ -291,7 +276,6 @@ class OpenoltDevice(object):
     def post_down(self, event):
         self.log.debug('post_down')
         self.flow_mgr.reset_flows()
-
 
     def indications_thread(self):
         self.log.debug('starting-indications-thread')
@@ -415,6 +399,7 @@ class OpenoltDevice(object):
 
         if onu_device is None:
             onu_id = self.new_onu_id(intf_id)
+
             try:
                 self.add_onu_device(
                     intf_id,
@@ -486,6 +471,7 @@ class OpenoltDevice(object):
             self.log.error('onu not found', intf_id=onu_indication.intf_id,
                            onu_id=onu_indication.onu_id)
             return
+
 
         if platform.intf_id_from_pon_port_no(onu_device.parent_port_no) \
                 != onu_indication.intf_id:
@@ -574,67 +560,10 @@ class OpenoltDevice(object):
             # Device was in Discovered state, setting it to active
 
             # Prepare onu configuration
-            # If we are using the old/current broadcom adapter otherwise
-            # use the openomci adapter
-            if onu_device.adapter == 'broadcom_onu':
-                self.log.debug('using-broadcom_onu')
+            # If we are  brcm_openomci adapter proceed
 
-                # onu initialization, base configuration (bridge setup ...)
-                def onu_initialization():
 
-                    onu_adapter_agent.adapter.devices_handlers[onu_device.id] \
-                                     .message_exchange(cvid=DEFAULT_MGMT_VLAN)
-                    self.log.debug('broadcom-message-exchange-started')
-
-                # tcont creation (onu)
-                tcont = TcontsConfigData()
-                tcont.alloc_id = platform.mk_alloc_id(
-                    onu_indication.intf_id, onu_indication.onu_id)
-
-                # gem port creation
-                gem_port = GemportsConfigData()
-                gem_port.gemport_id = platform.mk_gemport_id(
-                    onu_indication.intf_id,
-                    onu_indication.onu_id)
-
-                # ports creation/update
-                def port_config():
-
-                    # "v_enet" creation (olt)
-
-                    # add_port update port when it exists
-                    self.adapter_agent.add_port(
-                        self.device_id,
-                        Port(
-                            port_no=uni_no,
-                            label=uni_name,
-                            type=Port.ETHERNET_UNI,
-                            admin_state=AdminState.ENABLED,
-                            oper_status=OperStatus.ACTIVE))
-
-                    # v_enet creation (onu)
-
-                    venet = VEnetConfig(name=uni_name)
-                    venet.interface.name = uni_name
-                    onu_adapter_agent.create_interface(onu_device, venet)
-
-                # ONU device status update in the datastore
-                def onu_update_oper_status():
-                    onu_device.oper_status = OperStatus.ACTIVE
-                    onu_device.connect_status = ConnectStatus.REACHABLE
-                    self.adapter_agent.update_device(onu_device)
-
-                # FIXME : the asynchronicity has to be taken care of properly
-                onu_initialization()
-                reactor.callLater(10, onu_adapter_agent.create_tcont,
-                                  device=onu_device, tcont_data=tcont,
-                                  traffic_descriptor_data=None)
-                reactor.callLater(11, onu_adapter_agent.create_gemport,
-                                  onu_device, gem_port)
-                reactor.callLater(12, port_config)
-                reactor.callLater(12, onu_update_oper_status)
-
-            elif onu_device.adapter == 'brcm_openomci_onu':
+            if onu_device.adapter == 'brcm_openomci_onu':
                 self.log.debug('using-brcm_openomci_onu')
 
                 # tcont creation (onu)
@@ -644,9 +573,10 @@ class OpenoltDevice(object):
 
                 # gem port creation
                 gem_port = GemportsConfigData()
-                gem_port.gemport_id = platform.mk_gemport_id(
+                gem_port.gemport_id =  platform.mk_gemport_id(
                     onu_indication.intf_id,
                     onu_indication.onu_id)
+
                 gem_port.tcont_ref = str(tcont.alloc_id)
 
                 self.log.info('inject-tcont-gem-data-onu-handler',
@@ -659,7 +589,8 @@ class OpenoltDevice(object):
                 onu_adapter_agent.create_interface(onu_device, onu_indication)
 
             else:
-                self.log.error('unsupported-openolt-onu-adapter')
+                self.log.error('unsupported-openolt-onu-adapter',
+                               onu_adapter=onu_device.adapter)
 
         else:
             self.log.warn('Not-implemented-or-invalid-value-of-oper-state',
@@ -710,7 +641,7 @@ class OpenoltDevice(object):
         onu_device = self.adapter_agent.get_child_device(
             self.device_id, onu_id=omci_indication.onu_id,
             parent_port_no=platform.intf_id_to_port_no(
-                            omci_indication.intf_id, Port.PON_OLT),)
+                omci_indication.intf_id, Port.PON_OLT), )
 
         self.adapter_agent.receive_proxied_message(onu_device.proxy_address,
                                                    omci_indication.pkt)
@@ -787,10 +718,10 @@ class OpenoltDevice(object):
 
     def send_proxied_message(self, proxy_address, msg):
         onu_device = self.adapter_agent.get_child_device(
-            self.device_id,
-            onu_id=proxy_address.onu_id,
-            parent_port_no=platform.intf_id_to_port_no(
-                proxy_address.channel_id, Port.PON_OLT))
+            self.device_id, onu_id=proxy_address.onu_id,
+                parent_port_no=platform.intf_id_to_port_no(
+                proxy_address.channel_id, Port.PON_OLT)
+        )
         if onu_device.connect_status != ConnectStatus.REACHABLE:
             self.log.debug('ONU is not reachable, cannot send OMCI',
                            serial_number=onu_device.serial_number,
@@ -951,12 +882,6 @@ class OpenoltDevice(object):
 
             try:
                 self.flow_mgr.add_flow(flow)
-            except grpc.RpcError as grpc_e:
-                if grpc_e.code() == grpc.StatusCode.ALREADY_EXISTS:
-                    self.log.warn('flow already exists', e=grpc_e, flow=flow)
-                else:
-                    self.log.error('failed to add flow', flow=flow,
-                                   grpc_error=grpc_e)
             except Exception as e:
                 self.log.error('failed to add flow', flow=flow, e=e)
 
@@ -1101,3 +1026,4 @@ class OpenoltDevice(object):
 
     def simulate_alarm(self, alarm):
         self.alarm_mgr.simulate_alarm(alarm)
+
