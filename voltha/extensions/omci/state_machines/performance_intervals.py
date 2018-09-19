@@ -337,10 +337,14 @@ class PerformanceIntervals(object):
                 self._device.omci_cc.event_bus.unsubscribe(sub)
 
         # Manually remove ani ANI/PON and UNI PM interval MEs
-        config = self._device.configuration
+        config = self._device.configuration()
 
+<<<<<<< HEAD
         for pon in config.ani_g_entities:
             # jason patch test
+=======
+        for pon in config.ani_g_entities():
+>>>>>>> master
             if pon is None:
                 continue
             entity_id = pon['entity-id']

@@ -37,7 +37,7 @@ spec:
     spec:
       containers:
         - name: voltha
-          image: docker-repo.dev.atl.foundry.att.com:5000/voltha-envoy:1.8.23
+          image: docker-repo.dev.atl.foundry.att.com:5000/voltha-envoy:1.9.11
           env:
             - name: POD_IP
               valueFrom:

@@ -20,7 +20,6 @@ import voltha.protos.device_pb2 as dev_pb2
 """
 Encoding of identifiers
 =======================
-
 GEM port ID
 
     GEM port id is unique per PON port
@@ -106,10 +105,6 @@ PON OLT (OF) port number
 
 MAX_ONUS_PER_PON = 112
 
-def mk_uni_port_num(intf_id, onu_id):
-    return intf_id << 11 | onu_id << 4
-
-
 def mk_alloc_id(intf_id, onu_id, idx=0):
     # FIXME - driver should do prefixing 1 << 10 as it is Maple specific
     # return 1<<10 | onu_id<<6 | idx
@@ -122,6 +117,8 @@ def mk_gemport_id(intf_id, onu_id, idx=0):
 def onu_id_from_gemport_id(gemport_id):
     return (((gemport_id - 1024) // 7) % MAX_ONUS_PER_PON) + 1
 
+def mk_uni_port_num(intf_id, onu_id):
+    return intf_id << 11 | onu_id << 4
 
 def mk_flow_id(intf_id, onu_id, idx):
     return intf_id << 11 | onu_id << 4 | idx
@@ -184,3 +181,4 @@ def is_upstream(out_port):
         return True
 
     return False
+

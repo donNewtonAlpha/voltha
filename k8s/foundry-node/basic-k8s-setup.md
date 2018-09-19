@@ -136,8 +136,6 @@ kubectl apply -f foundry-node/foundry-k8s-cluster/calico-3.1.3-k8setcd.yaml
 ```
 
 
-
-
 ## Verify full k8s functionality
 
 Everything should eventually become 'Running'
@@ -152,5 +150,53 @@ dig +short @10.96.0.10 kubernetes.default.svc.cluster.local
 dig +short @10.96.0.10 SRV _https._tcp.kubernetes.default.svc.cluster.local
 ```
 
-At this point you have a basic single instance kubernetes.  From here install helm or install basic voltha deployments.
+
+## Install helm
+
+Copy helm binary onto host system.  
+```
+cd ~/source
+wget https://storage.googleapis.com/kubernetes-helm/helm-v2.9.1-linux-amd64.tar.gz
+mkdir helm-unpack
+cd helm-unpack/
+tar -zxvf ../helm-v2.9.1-linux-amd64.tar.gz
+cp linux-amd64/helm /usr/local/bin/
+cd ..
+```
+
+Apply helm role and start helm tiller
+```
+cd ~/source/voltha/k8s/
+kubectl apply -f foundry-node/foundry-k8s-cluster/helm-role.yaml
+helm init --service-account tiller
+export HELM_HOME=/home/foundry/.helm
+helm repo add incubator https://kubernetes-charts-incubator.storage.googleapis.com/
+helm repo update
+
+# Reset non-root user permissions back properly
+chown -R foundry:foundry /home/foundry
+```
+
+Verify helm/tiller is running
+```
+kubectl get pods --all-namespaces -o wide |grep tiller
+
+helm list
+# should be empty
+
+
+helm repo list
+
+# should show 2 or 3 repos
+NAME     	URL
+stable   	https://kubernetes-charts.storage.googleapis.com
+local    	http://127.0.0.1:8879/charts
+incubator	https://kubernetes-charts-incubator.storage.googleapis.com/
+```
+
+
+## Finished
+
+At this point you have a basic single instance k8s.
+From here you can install basic voltha or full seba pod using helm.  Or manually apply yaml files.
 
