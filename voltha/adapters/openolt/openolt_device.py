@@ -208,7 +208,7 @@ class OpenoltDevice(object):
                                        self.logical_device_id,
                                        self.resource_manager)
 
-        yield self._initialize_resource_manager_resource_pools()
+        self._initialize_resource_manager_resource_pools()
 
         # TODO: check for uptime and reboot if too long (VOL-1192)
 
@@ -411,7 +411,7 @@ class OpenoltDevice(object):
 
         if onu_device is None:
             try:
-                onu_id = yield self.resource_manager.get_resource_id(
+                onu_id = self.resource_manager.get_resource_id(
                     intf_id, PONResourceManager.ONU_ID)
                 if onu_id is None:
                     raise Exception("onu-id-unavailable")
@@ -419,7 +419,7 @@ class OpenoltDevice(object):
                 pon_intf_onu_id = (intf_id, onu_id)
                 self.resource_manager.init_resource_store(pon_intf_onu_id)
 
-                alloc_id = yield self.resource_manager.get_alloc_id(
+                alloc_id = self.resource_manager.get_alloc_id(
                     pon_intf_onu_id)
                 if alloc_id is None:
                     # Free up other PON resources if are unable to
@@ -1079,10 +1079,10 @@ class OpenoltDevice(object):
     def simulate_alarm(self, alarm):
         self.alarm_mgr.simulate_alarm(alarm)
 
-    @inlineCallbacks
+
     def _initialize_resource_manager_resource_pools(self):
         try:
-            yield self.resource_manager.initialize_device_resource_range_and_pool()
+            self.resource_manager.initialize_device_resource_range_and_pool()
         except Exception as e:
             # When resource manager initialization fails we can't proceed
             # further so, exiting without instantiating openolt adapter

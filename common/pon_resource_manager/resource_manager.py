@@ -118,12 +118,11 @@ class PONResourceManager(object):
             self._log.error("failed-to-read-resource-ranges-from-kv-store")
             self.init_default_pon_resource_ranges()
 
-    @inlineCallbacks
     def init_resource_ranges_from_kv_store(self):
         path = self.PON_RESOURCE_RANGE_CONFIG_PATH.format(
             self.technology, self.olt_vendor_type)
         # get resource from kv store
-        result = yield self._kv_store.get(path)
+        result = self._kv_store.get(path)
         resource_range_config = result[0]
 
         if resource_range_config is not None:
@@ -131,9 +130,9 @@ class PONResourceManager(object):
             self._log.debug("Init-resource-ranges-from-kvstore-success",
                             pon_resource_ranges=self.pon_resource_ranges,
                             path=path)
-            returnValue(True)
+            return True
 
-        returnValue(False)
+        return False
 
     def init_default_pon_resource_ranges(self, onu_start_idx=1,
                                          onu_end_idx=127,

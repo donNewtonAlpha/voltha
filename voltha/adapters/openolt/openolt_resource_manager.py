@@ -246,10 +246,10 @@ class OpenOltResourceMgr(object):
         for gemport_id in gemport_ids:
             del self.pon_intf_gemport_to_onu_id_map[(pon_intf_id, gemport_id)]
 
-    @inlineCallbacks
+
     def initialize_device_resource_range_and_pool(self):
         if not self.use_device_info:
-            status = yield self.resource_mgr.init_resource_ranges_from_kv_store()
+            status = self.resource_mgr.init_resource_ranges_from_kv_store()
             if not status:
                 self.log.error("failed-to-load-resource-range-from-kv-store")
                 # When we have failed to read the PON Resource ranges from KV
