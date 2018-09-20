@@ -55,11 +55,11 @@ helm repo list
 
 Install Kafka and etcd-operator from hosted repos
 ```
-helm install -n cord-kafka incubator/kafka --set replicas=1 --set persistence.enabled=false --set zookeeper.servers=1 --set zookeeper.persistence.enabled=false
+helm install -n cord-kafka incubator/kafka --set persistence.enabled=false
 helm install -n etcd-operator stable/etcd-operator
 
-# wait until the etcd CustomResourceDefinitions are added
-kubectl api-resources |grep etcd.database.coreos.com
+# wait until the 3 etcd CustomResourceDefinitions are added
+kubectl get crd | grep etcd
 ```
 
 
