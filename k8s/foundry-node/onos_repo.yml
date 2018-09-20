@@ -6,10 +6,12 @@ metadata:
    labels:
      name: onos
 spec:
+  type: NodePort
   ports:
     - name: ssh
       port: 8101
       targetPort: 8101
+      nodePort: 30115
     - name: of
       port: 6653
       targetPort: 6653

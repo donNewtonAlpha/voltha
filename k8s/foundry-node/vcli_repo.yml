@@ -6,10 +6,12 @@ metadata:
   labels:
     name: vcli
 spec:
+  type: NodePort
   ports:
     - name: ssh
       port: 5022
       targetPort: 22
+      nodePort: 30110
   selector:
     app: vcli
 ---

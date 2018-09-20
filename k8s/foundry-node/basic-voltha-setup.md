@@ -113,25 +113,32 @@ At this point voltha and its required pods are running.  Use the CLI or API to a
 
 ## USEFUL SCRIPTS AND ALIASES 
 
+Add an entry called master0 into your hosts file.  This is to stay consistent with cluster naming later:
+```
+localip=$(ip addr show dev eth0|grep "inet "|awk '{ print $2 }' |cut -d'/' -f1)
+sudo bash -c "echo \"${localip}     master0\" >> /etc/hosts"
+```
+
 Add this to your .bashrc file for ease of system usage.
 ```
+export EDITOR=vi
+export HELM_HOME=/home/foundry/.helm
+export ETCDCTL_API=3
+
 alias purge='~/source/voltha/k8s/foundry-node/scripts/etcd-clean.sh purge'
-alias vcli='ssh -p 5022 -o StrictHostKeyChecking=no voltha@vcli.voltha.svc.cluster.local'
-alias onos='ssh-keygen -f "/home/foundry/.ssh/known_hosts" -R [onos.voltha.svc.cluster.local]:8101; ssh -p 8101 -o StrictHostKeyChecking=no karaf@onos.voltha.svc.cluster.local'
+alias onos='ssh-keygen -f "/home/foundry/.ssh/known_hosts" -R [master0]:30115; ssh -p 30115 -o StrictHostKeyChecking=no karaf@master0'
+alias vcli='ssh-keygen -f "/home/foundry/.ssh/known_hosts" -R [master0]:30110; ssh -p 30110 -o StrictHostKeyChecking=no voltha@master0'
+alias kgp='kubectl get pods --all-namespaces -o wide'
 
-
-kgp() {
-  kubectl get pods --all-namespaces
+kol ()
+{
+    pod=$(kubectl get pods -n voltha |grep onos |grep Running | awk '{print $1}');
+    kubectl logs $pod -n voltha $@
 }
-
-kvl() {
-  pod=$(kubectl get pods -n voltha |grep vcore | awk '{print $1}')
-  kubectl logs $pod -n voltha $@
-}
-
-kol() {
-  pod=$(kubectl get pods -n voltha |grep onos | awk '{print $1}')
-  kubectl logs $pod -n voltha $@
+kvl ()
+{
+    pod=$(kubectl get pods -n voltha |grep vcore |grep Running | awk '{print $1}');
+    kubectl logs $pod -n voltha $@
 }
 ```
 
