@@ -55,11 +55,11 @@ helm repo list
 
 Install Kafka and etcd-operator from hosted repos
 ```
-helm install -n cord-kafka incubator/kafka --set replicas=1 --set persistence.enabled=false --set zookeeper.servers=1 --set zookeeper.persistence.enabled=false
+helm install -n cord-kafka incubator/kafka --set persistence.enabled=false
 helm install -n etcd-operator stable/etcd-operator
 
 # wait until the etcd CustomResourceDefinitions are added
-kubectl api-resources |grep etcd.database.coreos.com
+kubectl get crd | grep etcd
 ```
 
 
@@ -109,21 +109,18 @@ kubectl get pods -o wide |grep Complete
 Below is where provisioning starts.  These are specific to the QA pod so change yaml files to match your environment.  Replace localip with whichever k8s host has the available NodePorts.   See kubectl get svc.  These TOSCA files being curl'ed into the pod represent the provisioning steps needed to build a pod, add an olt, add an onu, and then add a subscriber.   These ultimately would be called upon by an OSS system, using either gRPC or RESTful calls.  But for now we use curl to get things going. 
 ```
 cd ~/source/podconfigs/tosca/att-workflow
-
-# replace mgmtbr with whatever your physical interface host interface is.  eno1, eth0, etc.
-localip=$(ip addr show dev mgmtbr|grep "inet "|awk '{ print $2 }' |cut -d'/' -f1)
 ```
 
 Load radius server config into onos voltha.  You may need to replace foundry-simple-netcfg.json with foundry-full-netcfg.json depending on if xos syncronizers can fully populate/query sadis.
 ```
-~/foundry-k8s-cluster/quick-onos-update.sh $localip foundry-simple-netcfg.json
+~/foundry-k8s-cluster/quick-onos-update.sh master0 foundry-simple-netcfg.json
 ```
 
 Run the tosca model additions to create pod, olt line card, onu whitelist additions, and actual subscriber data.  One important difference from previous voltha installs is you do NOT have to preprovision or enable the OLT via the voltha cli.   The API provisioning of the foundry-pod-olt.yaml below does that step.  You DO still need to start bal_core_dist and openolt on the edgecore itself.
 ```
-curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --data-binary @foundry-pod-olt.yaml http://${localip}:30007/run
-curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --data-binary @foundry-whitelist.yaml http://${localip}:30007/run
-curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --data-binary @foundry-subscribers.yaml http://${localip}:30007/run
+curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --data-binary @foundry-pod-olt.yaml http://master0:30007/run
+curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --data-binary @foundry-whitelist.yaml http://master0:30007/run
+curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --data-binary @foundry-subscribers.yaml http://master0:30007/run
 ```
 
 At this point plug in ONU and RG that can authenticate to the ATT lab radius server.  VLANS should be pushed on successfull eap authentication and traffic pass all the way out to the BNG.
