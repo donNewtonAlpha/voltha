@@ -18,6 +18,7 @@ spec:
     - name: ui
       port: 8181
       targetPort: 8181
+      nodePort: 30120
   selector:
     app: onos
 ---
