@@ -96,15 +96,15 @@
           "remoteId" : "ATLEDGEVOLT1-RID"
         }, {
           "id" : "ALCLfa5b915b",
-          "cTag" : 20,
-          "sTag" : 12,
+          "cTag" : 22,
+          "sTag" : 13,
           "nasPortId" : "PON 1/1/3/1:3.1.1",
           "circuitId" : "PON 1/1/3/1:3.1.1-CID",
           "remoteId" : "ATLEDGEVOLT1-RID"
         }, {
-          "id" : "ALCLfa5b91e4",
-          "cTag" : 21,
-          "sTag" : 11,
+          "id" : "ALCLfa5b91c3",
+          "cTag" : 20,
+          "sTag" : 12,
           "nasPortId" : "PON 1/1/3/1:4.1.1",
           "circuitId" : "PON 1/1/3/1:4.1.1-CID",
           "remoteId" : "ATLEDGEVOLT1-RID"
