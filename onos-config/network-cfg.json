@@ -27,6 +27,15 @@
         "vlan" : "12"
       }
     },
+    "of:000000000a4001d0" : {
+      "basic" : {
+        "driver" : "pmc-olt"
+      },
+      "accessDevice" : {
+        "uplink" : "65536",
+        "vlan" : "13"
+      }
+    },
     "of:000000000af20b15" : {
       "basic" : {
         "driver" : "pmc-olt"
@@ -79,6 +88,12 @@
           "uplinkPort" : 65536,
           "hardwareIdentifier" : "3c:2c:99:f7:c6:82",
           "ipAddress" : "10.64.1.207",
+          "nasId" : "ATLEDGEVOLT1"
+        }, {
+          "id" : "10.64.1.208:9191",
+          "uplinkPort" : 65536,
+          "hardwareIdentifier" : "3c:2c:99:f7:c6:40",
+          "ipAddress" : "10.64.1.208",
           "nasId" : "ATLEDGEVOLT1"
         }, {
           "id" : "ALPHe3d1ce3f",
