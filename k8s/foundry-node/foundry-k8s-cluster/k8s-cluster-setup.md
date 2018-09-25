@@ -17,6 +17,12 @@ addresses and which will be assigned their respective master role.  Some section
 
 ## Run this section on ALL 3 HOSTS.  master0, master1, and master2
 
+Disable swap if it was installed.  Left as an exersize to the reader on making this permanent and reclaiming the disk space.
+```
+swapoff -a
+```
+
+
 ### Repo/package prep
 
 scp package from outside host the build package, foundry-k8s-cluster.tgz. Or git clone.
