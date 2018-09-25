@@ -1,6 +1,6 @@
 # Foundry Single instance kubernetes (k8s)
  
-Minimum 8vcpu 8gb memory, 40GB disk. 
+Minimum 8vcpu 8gb memory, 40GB disk.  NO SWAP.  kubernetes, kubelet, and kubeadm will not run with swap enabled.
 And a basic install of Ubuntu 16.04, patched and updated
 
 ```
@@ -8,6 +8,12 @@ sudo apt update
 sudo apt dist-upgrade
 reboot
 ```
+
+Disable swap if it was installed.  Left as an exersize to the reader on making this permanent and reclaiming the disk space.
+```
+swapoff -a
+```
+
 
 
 Add docker-ce gpg key and repo
