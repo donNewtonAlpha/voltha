@@ -63,7 +63,7 @@ kubectl get crd | grep etcd
 ```
 
 
-Install etcd-operator managed etcd cluster
+Install an etcd-operator managed etcd cluster.  This is done separately from installing etcd-operator to prevent etcd cluster startup errors and to allow for some etcd tuning.
 ```
 helm install -n etcd-cluster etcd-cluster
 
@@ -79,7 +79,7 @@ helm install -n xos-core xos-core
 ```
 
 
-Install voltha.  Note the custom values.  There we define the docker images we want to run, and the kafka that we want voltha to share with xos and onos.
+Install voltha.  Note the custom values.  There we define the docker images we want to run, and the kafka that we want voltha to share with xos and onos.  Also disable creating an etcd-operator instance as part of this install as it was done already above.
 ```
 helm dep update voltha
 helm install -n voltha voltha -f ~/foundry-k8s-cluster/att-seba-voltha-values.yaml
@@ -111,7 +111,7 @@ Below is where provisioning starts.  These are specific to the QA pod so change 
 cd ~/source/podconfigs/tosca/att-workflow
 ```
 
-Load radius server config into onos voltha.  You may need to replace foundry-simple-netcfg.json with foundry-full-netcfg.json depending on if xos syncronizers can fully populate/query sadis.
+Load radius server config into onos voltha.  You may need to replace foundry-simple-netcfg.json with foundry-full-netcfg.json depending on if xos syncronizers can fully populate/query sadis.  Replace master0 with one of your k8s host's IP addresses.  If using a previous k8s install guide master0 should already be in /etc/hosts on each host.
 ```
 ~/foundry-k8s-cluster/quick-onos-update.sh master0 foundry-simple-netcfg.json
 ```
