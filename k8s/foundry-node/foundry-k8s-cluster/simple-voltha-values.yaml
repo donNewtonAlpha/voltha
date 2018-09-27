@@ -11,7 +11,7 @@ ofagentImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-ofagent:gold-cand
 dashdImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-dashd:1.0'
 shovelImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-shovel:1.0'
 vcliImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-cli:1.9.11'
-vcoreImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-voltha:gold.9.19'
+vcoreImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-voltha:gold-candidate.9.26'
 
 ofagent_args:
 - "/ofagent/ofagent/main.py"
