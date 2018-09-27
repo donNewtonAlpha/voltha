@@ -117,7 +117,7 @@ helm install -n base-kubernetes xos-profiles/base-kubernetes -f ~/foundry-k8s-cl
 Allow xos-profiles tosca loaders to finish.  Both att-workflow and base-kubernetes.  
 ```
 kubectl get pods -o wide |grep Complete
-``
+```
 
 
 Login to voltha cli and onos cli.  Verify voltha devices are empty.  Verify onos apps are loaded and kafka connected
