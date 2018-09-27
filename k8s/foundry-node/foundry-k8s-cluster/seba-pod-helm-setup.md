@@ -55,7 +55,7 @@ helm repo list
 
 Install Kafka and etcd-operator from hosted repos
 ```
-helm install -n cord-kafka incubator/kafka --set persistence.enabled=false
+helm install -n cord-kafka incubator/kafka --version 0.8.8 --set persistence.enabled=false --set zookeeper.persistence.enabled=false
 helm install -n etcd-operator stable/etcd-operator
 
 # wait until the etcd CustomResourceDefinitions are added
@@ -72,10 +72,17 @@ kubectl get pods -o wide |grep etcd-cluster
 ```
 
 
+Install nem-monitoring.  prometheus and grafana
+```
+helm dep update nem-monitoring
+helm install -n nem-monitoring nem-monitoring
+```
+
+
 Install XOS Core
 ```
 helm dep update xos-core
-helm install -n xos-core xos-core
+helm install -n xos-core xos-core -f ~/foundry-k8s-cluster/att-seba-voltha-values.yaml
 ```
 
 
@@ -89,17 +96,33 @@ helm install -n voltha voltha -f ~/foundry-k8s-cluster/att-seba-voltha-values.ya
 Install onos
 ```
 helm dep update onos
-helm install -n onos onos -f ~/source/helm-charts/configs/onos.yaml
+helm install -n onos onos -f ~/source/helm-charts/configs/onos.yaml -f ~/foundry-k8s-cluster/att-seba-voltha-values.yaml
 ```
 
 
 Install att workflow xos-to-voltha and onos syncronizers.  Business logic specific.  Load needed onos apps into voltha onos.
 ```
 helm dep update xos-profiles/att-workflow
-helm install -n att-workflow xos-profiles/att-workflow
+helm install -n att-workflow xos-profiles/att-workflow -f ~/foundry-k8s-cluster/att-seba-voltha-values.yaml
+```
 
-# give the workflow pods time to populate models, load apps, etc.  Tosca loader task will be Complete
+
+Install k8s workflow synchronizers.  
+```
+helm dep update xos-profiles/base-kubernetes
+helm install -n base-kubernetes xos-profiles/base-kubernetes -f ~/foundry-k8s-cluster/att-seba-voltha-values.yaml
+```
+
+
+Allow xos-profiles tosca loaders to finish.  Both att-workflow and base-kubernetes.  
+```
 kubectl get pods -o wide |grep Complete
+``
+
+
+Login to voltha cli and onos cli.  Verify voltha devices are empty.  Verify onos apps are loaded and kafka connected
+```
+TODO: grab a screencap
 ```
 
 
@@ -126,6 +149,7 @@ curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --
 At this point plug in ONU and RG that can authenticate to the ATT lab radius server.  VLANS should be pushed on successfull eap authentication and traffic pass all the way out to the BNG.
 
 
+
 ## Troubleshoot and Purge
 
 Only needed to troubleshoot auth events
@@ -136,7 +160,7 @@ kubectl exec -ti kafkacat-86bf65f7f7-8w5m2 -- kafkacat -b cord-kafka -t authenti
 
 To delete everything.  
 ```
-helm delete --purge att-workflow onos voltha xos-core etcd-cluster etcd-operator cord-kafka
+helm delete --purge att-workflow base-kubernetes onos voltha xos-core nem-monitoring etcd-cluster etcd-operator cord-kafka
 
 # force removal of CRD added by etcd-operator
 kubectl delete customresourcedefinition etcdclusters.etcd.database.coreos.com

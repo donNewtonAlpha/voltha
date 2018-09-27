@@ -1,3 +1,4 @@
+# ATT SEBA Voltha Helm Values
 
 kafkaReleaseName: cord-kafka
 
@@ -11,5 +12,18 @@ ofagentImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-ofagent:gold-cand
 dashdImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-dashd:1.0'
 shovelImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-shovel:1.0'
 vcliImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-cli:1.9.11'
-vcoreImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-voltha:gold.9.19'
+vcoreImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-voltha:matt-test'
 
+onosImage: 'onosproject/onos:1.13.4'
+
+xos_coreImage: 'xosproject/xos-core:2.1.0'
+fabric:
+  fabric_synchronizerImage: 'xosproject/fabric-synchronizer:2.1.0'
+att-workflow-driver:
+  attWorkflowDriver_synchronizerImage: 'xosproject/att-workflow-driver-synchronizer:1.0.0'
+
+application_logs: |
+  log4j.logger.org.opencord.olt = DEBUG
+  log4j.logger.org.opencord.kafka = DEBUG
+  log4j.logger.org.opencord.sadis = DEBUG
+  log4j.logger.org.opencord.aaa = DEBUG

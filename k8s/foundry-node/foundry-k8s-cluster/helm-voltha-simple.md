@@ -55,7 +55,7 @@ helm repo list
 
 Install Kafka and etcd-operator from hosted repos
 ```
-helm install -n cord-kafka incubator/kafka --set persistence.enabled=false
+helm install -n cord-kafka incubator/kafka --version 0.8.8 --set persistence.enabled=false --set zookeeper.persistence.enabled=false
 helm install -n etcd-operator stable/etcd-operator
 
 # wait until the 3 etcd CustomResourceDefinitions are added
@@ -79,7 +79,7 @@ helm install -n voltha voltha -f ~/foundry-k8s-cluster/simple-voltha-values.yaml
 ```
 
 
-Install onos
+Install onos.  Values point to a custom onos image with aaa, olt and sadis apps built in.  
 ```
 helm dep update onos
 helm install -n onos onos -f ~/foundry-k8s-cluster/simple-onos-values.yaml
