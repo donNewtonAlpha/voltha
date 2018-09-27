@@ -23,18 +23,23 @@ from voltha.extensions.alarms.adapter_alarms import AdapterAlarms
 from voltha.extensions.kpi.onu.onu_pm_metrics import OnuPmMetrics
 from voltha.extensions.kpi.onu.onu_omci_pm import OnuOmciPmMetrics
 
-from uuid import uuid4
 from twisted.internet import reactor
 from twisted.internet.defer import DeferredQueue, inlineCallbacks
 from twisted.internet.defer import returnValue
 
+from voltha.registry import registry
 from voltha.protos import third_party
 from voltha.protos.common_pb2 import OperStatus, ConnectStatus
 from common.utils.indexpool import IndexPool
 from voltha.extensions.omci.omci_me import *
 
+import voltha.adapters.adtran_olt.adtranolt_platform as platform
+from voltha.adapters.adtran_onu.flow.flow_entry import FlowEntry
+from omci.adtn_install_flow import AdtnInstallFlowTask
+from omci.adtn_remove_flow import AdtnRemoveFlowTask
+
 _ = third_party
-_MAXIMUM_PORT = 128       # PON and UNI ports
+_MAXIMUM_PORT = 17        # Only one PON and UNI port at this time
 _ONU_REBOOT_MIN = 90      # IBONT 602 takes about 3 minutes
 _ONU_REBOOT_RETRY = 10
 
@@ -58,17 +63,28 @@ class AdtranOnuHandler(AdtranXPON):
 
         self._openomci = OMCI(self, adapter.omci_agent)
         self._in_sync_subscription = None
+        # TODO: Need to find a way to sync with OLT. It is part of OpenFlow Port number as well
+        self._onu_port_number = 0
+        self._pon_port_number = 1
+        self._port_number_pool = IndexPool(_MAXIMUM_PORT, 0)
 
         self._unis = dict()         # Port # -> UniPort
-        self._pon = None
+        self._pon = PonPort.create(self, self._pon_port_number)
         self._heartbeat = HeartBeat.create(self, device_id)
 
         self._deferred = None
         self._event_deferred = None
 
-        self._port_number_pool = IndexPool(_MAXIMUM_PORT, 1)
+        # Flow entries
+        self._flows = dict()
 
-        self._olt_created = False   # True if deprecated method of OLT creating DA is used
+        # OMCI resources
+        # TODO: Some of these could be dynamically chosen
+        self.vlan_tcis_1 = 0x900
+        self.mac_bridge_service_profile_entity_id = self.vlan_tcis_1
+
+        # Assume no XPON support unless we get an vont-ani/ont-ani/venet create
+        self.xpon_support = False    # xPON no longer available
 
     def __str__(self):
         return "AdtranOnuHandler: {}".format(self.device_id)
@@ -119,10 +135,6 @@ class AdtranOnuHandler(AdtranXPON):
             # TODO: Anything else
 
     @property
-    def olt_created(self):
-        return self._olt_created    # ONU was created with deprecated 'child_device_detected' call
-
-    @property
     def openomci(self):
         return self._openomci
 
@@ -142,9 +154,8 @@ class AdtranOnuHandler(AdtranXPON):
         assert isinstance(port_no_or_name, int), 'Invalid parameter type'
         return self._unis.get(port_no_or_name)
 
-    @property
-    def pon_port(self):
-        return self._pon
+    def pon_port(self, port_no=None):
+        return self._pon if port_no is None or port_no == self._pon.port_number else None
 
     @property
     def pon_ports(self):
@@ -185,9 +196,7 @@ class AdtranOnuHandler(AdtranXPON):
 
     def stop(self):
         assert not self._enabled, 'Stop should only be called if disabled'
-        #
-        # TODO: Perform common shutdown tasks here
-        #
+
         self._cancel_deferred()
 
         # Drop registration for adapter messages
@@ -225,10 +234,6 @@ class AdtranOnuHandler(AdtranXPON):
             assert device.parent_id, 'Invalid Parent ID'
             assert device.proxy_address.device_id, 'Invalid Device ID'
 
-            if device.vlan:
-                # vlan non-zero if created via legacy method (not xPON).
-                self._olt_created = True
-
             # register for proxied messages right away
             self.proxy_address = device.proxy_address
             self.adapter_agent.register_for_proxied_messages(device.proxy_address)
@@ -243,23 +248,18 @@ class AdtranOnuHandler(AdtranXPON):
             device.connect_status = ConnectStatus.UNKNOWN
 
             # Register physical ports.  Should have at least one of each
-            self._pon = PonPort.create(self, self._next_port_number)
             self.adapter_agent.add_port(device.id, self._pon.get_port())
 
-            if self._olt_created:
-                # vlan non-zero if created via legacy method (not xPON). Also
-                # Set a random serial number since not xPON based
+            def xpon_not_found():
+                if not self.xpon_support:
+                    # Start things up for this ONU Handler.
+                    self.enabled = True
 
-                uni_port = UniPort.create(self, self._next_port_number, device.vlan,
-                                          'deprecated', device.vlan, None)
-                self._unis[uni_port.port_number] = uni_port
-                self.adapter_agent.add_port(device.id, uni_port.get_port())
-
-                device.serial_number = uuid4().hex
-                uni_port.add_logical_port(device.vlan, subscriber_vlan=device.vlan)
-
-                # Start things up for this ONU Handler.
-                self.enabled = True
+            # Schedule xPON 'not found' startup for 10 seconds from now. We will
+            # easily get a vONT-ANI create within that time if xPON is being used
+            # as this is how we are initially launched and activated in the first
+            # place if xPON is in use.
+            reactor.callLater(10, xpon_not_found)
 
             # reference of uni_port is required when re-enabling the device if
             # it was disabled previously
@@ -339,179 +339,83 @@ class AdtranOnuHandler(AdtranXPON):
         self.pm_metrics.update(pm_config)
 
     @inlineCallbacks
-    def update_flow_table(self, device, flows):
-        #
-        # We need to proxy through the OLT to get to the ONU
-        # Configuration from here should be using OMCI
-        #
-        # self.log.info('bulk-flow-update', device_id=device.id, flows=flows)
+    def update_flow_table(self, flows):
+        if len(flows) == 0:
+            returnValue('nop')  # TODO:  Do we need to delete all flows if empty?
 
-        import voltha.core.flow_decomposer as fd
-        from voltha.protos.openflow_13_pb2 import OFPXMC_OPENFLOW_BASIC
-
-        def is_downstream(port):
-            return port == 100  # Need a better way
-
-        def is_upstream(port):
-            return not is_downstream(port)
-
-        omci = self.openomci.omci_cc
+        self.log.debug('bulk-flow-update', flows=flows)
+        valid_flows = set()
 
         for flow in flows:
-            _type = None
-            _port = None
-            _vlan_vid = None
-            _udp_dst = None
-            _udp_src = None
-            _ipv4_dst = None
-            _ipv4_src = None
-            _metadata = None
-            _output = None
-            _push_tpid = None
-            _field = None
-            _set_vlan_vid = None
-            self.log.info('bulk-flow-update', device_id=device.id, flow=flow)
+            # Decode it
+            flow_entry = FlowEntry.create(flow, self)
+
+            # Already handled?
+            if flow_entry.flow_id in self._flows:
+                valid_flows.add(flow_entry.flow_id)
+
+            if flow_entry is None or flow_entry.flow_direction not in {FlowEntry.FlowDirection.UPSTREAM,
+                                                                       FlowEntry.FlowDirection.DOWNSTREAM}:
+                continue
+
+            is_upstream = flow_entry.flow_direction == FlowEntry.FlowDirection.UPSTREAM
+
+            # Ignore untagged upstream etherType flows. These are trapped at the
+            # OLT and the default flows during initial OMCI service download will
+            # send them to the Default VLAN (4091) port for us
+            #
+            if is_upstream and flow_entry.vlan_vid is None and flow_entry.etype is not None:
+                continue
+
+            # Also ignore upstream untagged/priority tag that sets priority tag
+            # since that is already installed and any user-data flows for upstream
+            # priority tag data will be at a higher level.  Also should ignore the
+            # corresponding priority-tagged to priority-tagged flow as well.
+
+            if (flow_entry.vlan_vid == 0 and flow_entry.set_vlan_vid == 0) or \
+                    (flow_entry.vlan_vid is None and flow_entry.set_vlan_vid == 0
+                     and not is_upstream):
+                continue
+
+            # Is it the first user-data flow downstream with a non-zero/non-None VID
+            # to match on?  If so, use as the device VLAN
+            # TODO: When multicast is supported, skip the multicast VLAN here?
+
+            if not is_upstream and flow_entry.vlan_vid:
+                uni = self.uni_port(flow_entry.out_port)
+                if uni is not None:
+                    uni.subscriber_vlan = flow_entry.vlan_vid
+
+            # Add it to hardware
             try:
-                _in_port = fd.get_in_port(flow)
-                assert _in_port is not None
+                def failed(_reason, fid):
+                    del self._flows[fid]
 
-                if is_downstream(_in_port):
-                    self.log.info('downstream-flow')
-                elif is_upstream(_in_port):
-                    self.log.info('upstream-flow')
-                else:
-                    raise Exception('port should be 1 or 2 by our convention')
+                task = AdtnInstallFlowTask(self.openomci.omci_agent, self, flow_entry)
+                d = self.openomci.onu_omci_device.task_runner.queue_task(task)
+                d.addErrback(failed, flow_entry.flow_id)
 
-                _out_port = fd.get_out_port(flow)  # may be None
-                self.log.info('out-port', out_port=_out_port)
-
-                for field in fd.get_ofb_fields(flow):
-                    if field.type == fd.ETH_TYPE:
-                        _type = field.eth_type
-                        self.log.info('field-type-eth-type',
-                                      eth_type=_type)
-
-                    elif field.type == fd.IP_PROTO:
-                        _proto = field.ip_proto
-                        self.log.info('field-type-ip-proto',
-                                      ip_proto=_proto)
-
-                    elif field.type == fd.IN_PORT:
-                        _port = field.port
-                        self.log.info('field-type-in-port',
-                                      in_port=_port)
-
-                    elif field.type == fd.VLAN_VID:
-                        _vlan_vid = field.vlan_vid & 0xfff
-                        self.log.info('field-type-vlan-vid',
-                                      vlan=_vlan_vid)
-
-                    elif field.type == fd.VLAN_PCP:
-                        _vlan_pcp = field.vlan_pcp
-                        self.log.info('field-type-vlan-pcp',
-                                      pcp=_vlan_pcp)
-
-                    elif field.type == fd.UDP_DST:
-                        _udp_dst = field.udp_dst
-                        self.log.info('field-type-udp-dst',
-                                      udp_dst=_udp_dst)
-
-                    elif field.type == fd.UDP_SRC:
-                        _udp_src = field.udp_src
-                        self.log.info('field-type-udp-src',
-                                      udp_src=_udp_src)
-
-                    elif field.type == fd.IPV4_DST:
-                        _ipv4_dst = field.ipv4_dst
-                        self.log.info('field-type-ipv4-dst',
-                                      ipv4_dst=_ipv4_dst)
-
-                    elif field.type == fd.IPV4_SRC:
-                        _ipv4_src = field.ipv4_src
-                        self.log.info('field-type-ipv4-src',
-                                      ipv4_dst=_ipv4_src)
-
-                    elif field.type == fd.METADATA:
-                        _metadata = field.table_metadata
-                        self.log.info('field-type-metadata',
-                                      metadata=_metadata)
-
-                    else:
-                        raise NotImplementedError('field.type={}'.format(
-                            field.type))
-
-                for action in fd.get_actions(flow):
-
-                    if action.type == fd.OUTPUT:
-                        _output = action.output.port
-                        self.log.info('action-type-output',
-                                      output=_output, in_port=_in_port)
-
-                    elif action.type == fd.POP_VLAN:
-                        self.log.info('action-type-pop-vlan',
-                                      in_port=_in_port)
-
-                    elif action.type == fd.PUSH_VLAN:
-                        _push_tpid = action.push.ethertype
-                        self.log.info('action-type-push-vlan',
-                                 push_tpid=_push_tpid, in_port=_in_port)
-                        if action.push.ethertype != 0x8100:
-                            self.log.error('unhandled-tpid',
-                                           ethertype=action.push.ethertype)
-
-                    elif action.type == fd.SET_FIELD:
-                        _field = action.set_field.field.ofb_field
-                        assert (action.set_field.field.oxm_class ==
-                                OFPXMC_OPENFLOW_BASIC)
-                        self.log.info('action-type-set-field',
-                                      field=_field, in_port=_in_port)
-                        if _field.type == fd.VLAN_VID:
-                            _set_vlan_vid = _field.vlan_vid & 0xfff
-                            self.log.info('set-field-type-valn-vid', _set_vlan_vid)
-                        else:
-                            self.log.error('unsupported-action-set-field-type',
-                                           field_type=_field.type)
-                    else:
-                        self.log.error('unsupported-action-type',
-                                       action_type=action.type, in_port=_in_port)
-                #
-                # All flows created from ONU adapter should be OMCI based
-                #
-                if _vlan_vid == 0 and _set_vlan_vid != None and _set_vlan_vid != 0:
-                    # allow priority tagged packets
-                    # Set AR - ExtendedVlanTaggingOperationConfigData
-                    #          514 - RxVlanTaggingOperationTable - add VLAN <cvid> to priority tagged pkts - c-vid
-
-                    results = yield omci.send_delete_vlan_tagging_filter_data(0x2102)
-
-                    # self.send_set_vlan_tagging_filter_data(0x2102, _set_vlan_vid)
-                    results = yield omci.send_create_vlan_tagging_filter_data(
-                                        0x2102,
-                                        _set_vlan_vid)
-
-                    results = yield omci.send_set_extended_vlan_tagging_operation_vlan_configuration_data_untagged(
-                                        0x202,
-                                        0x1000,
-                                        _set_vlan_vid)
-
-                    results = yield omci.send_set_extended_vlan_tagging_operation_vlan_configuration_data_single_tag(
-                                        0x202,
-                                        8,
-                                        0,
-                                        0,
-                                        1,
-                                        8,
-                                        _set_vlan_vid)
-
-                    # Set AR - ExtendedVlanTaggingOperationConfigData
-                    #          514 - RxVlanTaggingOperationTable - add VLAN <cvid> to priority tagged pkts - c-vid
-                    '''
-                    results = yield omci.send_set_extended_vlan_tagging_operation_vlan_configuration_data_single_tag(0x205, 8, 0, 0,
-                                                   
-                    '''
+                valid_flows.add(flow_entry.flow_id)
+                self._flows[flow_entry.flow_id] = flow_entry
 
             except Exception as e:
-                self.log.exception('failed-to-install-flow', e=e, flow=flow)
+                self.log.exception('flow-add', e=e, flow=flow_entry)
+
+        # Now check for flows that were missing in the bulk update
+        deleted_flows = set(self._flows.keys()) - valid_flows
+
+        for flow_id in deleted_flows:
+            try:
+                del_flow = self._flows[flow_id]
+
+                task = AdtnRemoveFlowTask(self.openomci.omci_agent, self, del_flow)
+                self.openomci.onu_omci_device.task_runner.queue_task(task)
+                # TODO: Change to success/failure callback checks later
+                # d.addCallback(success, flow_entry.flow_id)
+                del self._flows[flow_id]
+
+            except Exception as e:
+                self.log.exception('flow-remove', e=e, flow=self._flows[flow_id])
 
     @inlineCallbacks
     def reboot(self):
@@ -634,34 +538,8 @@ class AdtranOnuHandler(AdtranXPON):
                                                                  self._pon.get_port())
             self._pon.enabled = False
 
-        # Send Uni Admin State Down
-
-        # ethernet_uni_entity_id = 0x101
-        # omci = self._handler.omci
-        # attributes = dict(
-        #     administrative_state=1  # - lock
-        # )
-        # frame = PptpEthernetUniFrame(
-        #     ethernet_uni_entity_id,  # Entity ID
-        #     attributes=attributes  # See above
-        # ).set()
-        # results = yield omci.send(frame)
-        #
-        # status = results.fields['omci_message'].fields['success_code']
-        # failed_attributes_mask = results.fields['omci_message'].fields['failed_attributes_mask']
-        # unsupported_attributes_mask = results.fields['omci_message'].fields['unsupported_attributes_mask']
-        # self.log.debug('set-pptp-ethernet-uni', status=status,
-        #                failed_attributes_mask=failed_attributes_mask,
-        #                unsupported_attributes_mask=unsupported_attributes_mask)
-
-
-        # Just updating the port status may be an option as well
-        # port.ofp_port.config = OFPPC_NO_RECV
-        # yield self.adapter_agent.update_logical_port(logical_device_id,
-        #                                             port)
         # Unregister for proxied message
-        self.adapter_agent.unregister_for_proxied_messages(
-            device.proxy_address)
+        self.adapter_agent.unregister_for_proxied_messages(device.proxy_address)
 
         # TODO:
         # 1) Remove all flows from the device
@@ -689,15 +567,11 @@ class AdtranOnuHandler(AdtranXPON):
             # Re-enable the ports on that device
             self.adapter_agent.enable_all_ports(self.device_id)
 
-            # Refresh the port reference
-            # self.uni_port = self._get_uni_port()   deprecated
-
             # Add the pon port reference to the parent
             if self._pon is not None:
                 self._pon.enabled = True
                 self.adapter_agent.add_port_reference_to_parent(device.id,
                                                                 self._pon.get_port())
-
             # Update the connect status to REACHABLE
             device.connect_status = ConnectStatus.REACHABLE
             self.adapter_agent.update_device(device)
@@ -707,15 +581,10 @@ class AdtranOnuHandler(AdtranXPON):
             self.logical_device_id = parent_device.parent_id
             assert self.logical_device_id, 'Invalid logical device ID'
 
-            if self.olt_created:
-                # vlan non-zero if created via legacy method (not xPON)
-                self.uni_port('deprecated').add_logical_port(device.vlan, device.vlan,
-                                                             subscriber_vlan=device.vlan)
-            else:
-                # reestablish logical ports for each UNI
-                for uni in self.uni_ports:
-                    self.adapter_agent.add_port(device.id, uni.get_port())
-                    uni.add_logical_port(uni.logical_port_number, subscriber_vlan=uni.subscriber_vlan)
+            # reestablish logical ports for each UNI
+            for uni in self.uni_ports:
+                self.adapter_agent.add_port(device.id, uni.get_port())
+                uni.add_logical_port(uni.logical_port_number, subscriber_vlan=uni.subscriber_vlan)
 
             device = self.adapter_agent.get_device(device.id)
             device.oper_status = OperStatus.ACTIVE
@@ -726,8 +595,7 @@ class AdtranOnuHandler(AdtranXPON):
             self.adapter_agent.update_device(device)
 
             self.log.info('re-enabled', device_id=device.id)
-            self._pon._dev_info_loaded = False
-            self._bridge_initialized = False
+
         except Exception, e:
             self.log.exception('error-reenabling', e=e)
 
@@ -754,6 +622,8 @@ class AdtranOnuHandler(AdtranXPON):
         :param ont_ani: (dict) new ONT-ani
         :return: (dict) Updated ONT-ani dictionary, None if item should be deleted
         """
+        self.xpon_support = True
+
         self.log.info('ont-ani-create', ont_ani=ont_ani)
         self.enabled = ont_ani['enabled']
 
@@ -771,6 +641,9 @@ class AdtranOnuHandler(AdtranXPON):
         :param diffs: (dict) collection of items different in the update
         :return: (dict) Updated ONT-ani dictionary, None if item should be deleted
         """
+        if not self.xpon_support:
+            return
+
         valid_keys = ['enabled', 'mgnt-gemport-aes']  # Modify of these keys supported
 
         invalid_key = next((key for key in diffs.keys() if key not in valid_keys), None)
@@ -798,15 +671,22 @@ class AdtranOnuHandler(AdtranXPON):
         :param ont_ani: (dict) ONT-ani to delete
         :return: (dict) None if item should be deleted
         """
+        if not self.xpon_support:
+            return
+
         # TODO: Is this ever called or is the iAdapter 'delete' called first?
         return None   # Implement in your OLT, if needed
 
     def on_vont_ani_create(self, vont_ani):
+        self.xpon_support = True
         self.log.info('vont-ani-create', vont_ani=vont_ani)
         # TODO: look up PON port and update 'upstream-channel-speed'
         return vont_ani   # Implement in your OLT, if needed
 
     def on_vont_ani_modify(self, vont_ani, update, diffs):
+        if not self.xpon_support:
+            return
+
         valid_keys = ['upstream-channel-speed']  # Modify of these keys supported
 
         invalid_key = next((key for key in diffs.keys() if key not in valid_keys), None)
@@ -822,9 +702,14 @@ class AdtranOnuHandler(AdtranXPON):
         return update
 
     def on_vont_ani_delete(self, vont_ani):
+        if not self.xpon_support:
+            return
+
         return self.delete()
 
     def on_venet_create(self, venet):
+        self.xpon_support = True
+
         self.log.info('venet-create', venet=venet)
 
         # TODO: This first set is copied over from BroadCOM ONU. For testing, actual work
@@ -863,46 +748,109 @@ class AdtranOnuHandler(AdtranXPON):
         # Start of actual work (what actually does something)
         # TODO: Clean this up.  Use looked up UNI
 
-        if self._olt_created:
-            uni_port = self.uni_port('deprecated')
+        # vlan non-zero if created via legacy method (not xPON). Also
+        # Set a random serial number since not xPON based
 
-        else:
-            # vlan non-zero if created via legacy method (not xPON). Also
-            # Set a random serial number since not xPON based
+        ofp_port_no, subscriber_vlan, untagged_vlan = UniPort.decode_venet(venet)
 
-            device = self.adapter_agent.get_device(self.device_id)
-            ofp_port_no, subscriber_vlan, untagged_vlan = UniPort.decode_venet(venet)
+        self._add_uni_port(self, venet['name'], ofp_port_no, subscriber_vlan,
+                           untagged_vlan, venet['enabled'])
+        return venet
 
-            uni_port = UniPort.create(self, venet['name'],
-                                      self._next_port_number,
-                                      ofp_port_no,
-                                      subscriber_vlan,
-                                      untagged_vlan)
+    # SEBA - Below is used by xPON mode
+    def _add_uni_port(self, port_name, ofp_port_no, subscriber_vlan, untagged_vlan, enable):
+        uni_port = UniPort.create(self, port_name,
+                                  self._onu_port_number,  # TODO: self._next_port_number,
+                                  ofp_port_no,
+                                  subscriber_vlan,
+                                  untagged_vlan)
 
-            self._unis[uni_port.port_number] = uni_port
-            self.adapter_agent.add_port(device.id, uni_port.get_port())
+        device = self.adapter_agent.get_device(self.device_id)
+        self.adapter_agent.add_port(device.id, uni_port.get_port())
 
-            # If the PON has already synchronized, add the logical port now
-            # since we know we have been activated
+        self._unis[uni_port.port_number] = uni_port
 
-            if self._pon is not None and self.openomci.connected:
-                uni_port.add_logical_port(ofp_port_no, subscriber_vlan=subscriber_vlan)
+        # If the PON has already synchronized, add the logical port now
+        # since we know we have been activated
+
+        if self._pon is not None and self.openomci.connected:
+            uni_port.add_logical_port(ofp_port_no, subscriber_vlan=subscriber_vlan)
 
         # TODO: Next is just for debugging to see what this call returns after
         #       we add a UNI
         # existing_uni_ports = self.adapter_agent.get_ports(onu_device.parent_id, Port.ETHERNET_UNI)
 
-        uni_port.enabled = venet['enabled']
+        uni_port.enabled = enable
 
-        return venet
+    def add_uni_ports(self):
+        """ Called after in-sync achieved and not in xPON mode"""
+        # TODO: Should this be moved to the omci.py module for this ONU?
+
+        # This is only for working WITHOUT xPON
+        assert not self.xpon_support
+        pptp_entities = self.openomci.onu_omci_device.configuration.pptp_entities
+
+        device = self.adapter_agent.get_device(self.device_id)
+        subscriber_vlan = device.vlan
+        untagged_vlan = OMCI.DEFAULT_UNTAGGED_VLAN
+
+        for entity_id, pptp in pptp_entities.items():
+            intf_id = self.proxy_address.channel_id
+            onu_id = self.proxy_address.onu_id
+
+            uni_no_start = platform.mk_uni_port_num(intf_id, onu_id)
+
+            working_port = self._next_port_number
+            uni_no = uni_no_start + working_port        # OpenFlow port number
+            uni_name = "uni-{}".format(uni_no)
+
+            mac_bridge_port_num = working_port + 1
+
+            self.log.debug('live-port-number-ready', uni_no=uni_no, uni_name=uni_name)
+
+            uni_port = UniPort.create(self, uni_name, uni_no, uni_name,
+                                      subscriber_vlan, untagged_vlan)
+
+            uni_port.entity_id = entity_id
+            uni_port.enabled = True
+            uni_port.mac_bridge_port_num = mac_bridge_port_num
+            uni_port.add_logical_port(uni_port.port_number, subscriber_vlan=subscriber_vlan)
+
+            self.log.debug("created-uni-port", uni=uni_port)
+
+            self.adapter_agent.add_port(device.id, uni_port.get_port())
+            parent_device = self.adapter_agent.get_device(device.parent_id)
+
+            parent_adapter_agent = registry('adapter_loader').get_agent(parent_device.adapter)
+            if parent_adapter_agent is None:
+                self.log.error('olt-adapter-agent-could-not-be-retrieved')
+
+            parent_adapter_agent.add_port(device.parent_id, uni_port.get_port())
+
+            self._unis[uni_port.port_number] = uni_port
+
+            # TODO: this should be in the PonPort class
+            pon_port = self._pon.get_port()
+            self.adapter_agent.delete_port_reference_from_parent(self.device_id,
+                                                                 pon_port)
+            # Find index where this ONU peer is (should almost always be zero)
+            d = [i for i, e in enumerate(pon_port.peers) if
+                 e.port_no == intf_id and e.device_id == device.parent_id]
+
+            if len(d) > 0:
+                pon_port.peers[d[0]].port_no = uni_port.port_number
+                self.adapter_agent.add_port_reference_to_parent(self.device_id,
+                                                                pon_port)
+            self.adapter_agent.update_device(device)
+
+            # TODO: only one uni/pptp for now. flow bug in openolt
 
     def on_venet_modify(self, venet, update, diffs):
-        # Look up the associated UNI port
+        if not self.xpon_support:
+            return
 
-        if self._olt_created:
-            uni_port = self.uni_port('deprecated')
-        else:
-            uni_port = self.uni_port(venet['name'])
+        # Look up the associated UNI port
+        uni_port = self.uni_port(venet['name'])
 
         if uni_port is not None:
             valid_keys = ['enabled']  # Modify of these keys supported
@@ -920,12 +868,11 @@ class AdtranOnuHandler(AdtranXPON):
         return update
 
     def on_venet_delete(self, venet):
-        # Look up the associated UNI port
+        if not self.xpon_support:
+            return
 
-        if self._olt_created:
-            uni_port = self.uni_port('deprecated')
-        else:
-            uni_port = self.uni_port(venet['name'])
+        # Look up the associated UNI port
+        uni_port = self.uni_port(venet['name'])
 
         if uni_port is not None:
             port_no = uni_port.port_number
@@ -1158,7 +1105,7 @@ class AdtranOnuHandler(AdtranXPON):
                 if msg[IN_SYNC_KEY]:
                     # Do not proceed if we have not got our vENET information yet.
 
-                    if len(self.uni_ports) > 0:
+                    if len(self.uni_ports) > 0 or not self.xpon_support:
                         # Drop subscription....
                         insync, self._in_sync_subscription = self._in_sync_subscription, None
 
@@ -1170,10 +1117,13 @@ class AdtranOnuHandler(AdtranXPON):
                         # vENET information is created. Once xPON is removed, we need to create
                         # them from the information provided from the MIB upload UNI-G and other
                         # UNI related MEs.
-
-                        for uni in self.uni_ports:
-                            uni.add_logical_port(None, None)
+                        if not self.xpon_support:
+                            self.add_uni_ports()
+                        else:
+                            for uni in self.uni_ports:
+                                uni.add_logical_port(None, None)
                     else:
+                        # SEBA - drop this one once xPON deprecated
                         self._deferred = reactor.callLater(5, self.in_sync_handler, _topic, msg)
 
             except Exception as e:
