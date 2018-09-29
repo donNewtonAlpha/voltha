@@ -125,6 +125,7 @@ export EDITOR=vi
 export HELM_HOME=/home/foundry/.helm
 export ETCDCTL_API=3
 
+source <(kubectl completion bash)
 alias purge='~/source/voltha/k8s/foundry-node/scripts/etcd-clean.sh purge'
 alias onos='ssh-keygen -f "/home/foundry/.ssh/known_hosts" -R [master0]:30115; ssh -p 30115 -o StrictHostKeyChecking=no karaf@master0'
 alias vcli='ssh-keygen -f "/home/foundry/.ssh/known_hosts" -R [master0]:30110; ssh -p 30110 -o StrictHostKeyChecking=no voltha@master0'
