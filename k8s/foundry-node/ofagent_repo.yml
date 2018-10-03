@@ -15,7 +15,7 @@ spec:
       terminationGracePeriodSeconds: 10
       containers:
       - name: ofagent
-        image: docker-repo.dev.atl.foundry.att.com:5000/voltha-ofagent:gold-candidate
+        image: docker-repo.dev.atl.foundry.att.com:5000/voltha-ofagent:gold.10.3
         imagePullPolicy: IfNotPresent
         env:
         - name: NAMESPACE

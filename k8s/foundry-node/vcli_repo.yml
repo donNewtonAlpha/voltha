@@ -31,7 +31,7 @@ spec:
     spec:
       containers:
         - name: vcli
-          image: docker-repo.dev.atl.foundry.att.com:5000/voltha-cli:1.9.11
+          image: docker-repo.dev.atl.foundry.att.com:5000/voltha-cli:gold.10.3
           env:
             - name: POD_IP
               valueFrom:

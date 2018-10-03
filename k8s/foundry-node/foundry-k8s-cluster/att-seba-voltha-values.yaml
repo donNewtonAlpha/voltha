@@ -6,13 +6,13 @@ etcd:
   operator:
     enabled: false
 
-envoyForEtcdImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-envoy:1.9.11'
-netconfImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-netconf:1.1'
-ofagentImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-ofagent:gold-candidate'
+envoyForEtcdImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-envoy:gold.10.3'
+netconfImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-netconf:gold.10.3'
+ofagentImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-ofagent:gold.10.3'
 dashdImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-dashd:1.0'
 shovelImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-shovel:1.0'
-vcliImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-cli:1.9.11'
-vcoreImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-voltha:gold-candidate.9.26'
+vcliImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-cli:gold.10.3'
+vcoreImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-voltha:gold.10.3'
 
 onosImage: 'onosproject/onos:1.13.4'
 
@@ -22,8 +22,8 @@ fabric:
 att-workflow-driver:
   attWorkflowDriver_synchronizerImage: 'xosproject/att-workflow-driver-synchronizer:1.0.0'
 
-application_logs: |
-  log4j.logger.org.opencord.olt = DEBUG
-  log4j.logger.org.opencord.kafka = DEBUG
-  log4j.logger.org.opencord.sadis = DEBUG
-  log4j.logger.org.opencord.aaa = DEBUG
+#application_logs: |
+#  log4j.logger.org.opencord.olt = DEBUG
+#  log4j.logger.org.opencord.kafka = DEBUG
+#  log4j.logger.org.opencord.sadis = DEBUG
+#  log4j.logger.org.opencord.aaa = DEBUG
