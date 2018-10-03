@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-import sys
 import threading
 import binascii
 import grpc
@@ -36,12 +35,10 @@ from voltha.registry import registry
 from voltha.adapters.openolt.protos import openolt_pb2_grpc, openolt_pb2
 from voltha.protos.bbf_fiber_tcont_body_pb2 import TcontsConfigData
 from voltha.protos.bbf_fiber_gemport_body_pb2 import GemportsConfigData
-from voltha.protos.bbf_fiber_base_pb2 import VEnetConfig
 
 from voltha.adapters.openolt.openolt_statistics import OpenOltStatisticsMgr
 import voltha.adapters.openolt.openolt_platform as platform
-from voltha.adapters.openolt.openolt_flow_mgr import OpenOltFlowMgr, \
-        DEFAULT_MGMT_VLAN
+from voltha.adapters.openolt.openolt_flow_mgr import OpenOltFlowMgr
 from voltha.adapters.openolt.openolt_alarms import OpenOltAlarmMgr
 from voltha.adapters.openolt.openolt_bw import OpenOltBW
 from voltha.extensions.alarms.onu.onu_discovery_alarm import OnuDiscoveryAlarm
@@ -68,24 +65,24 @@ class OpenoltDevice(object):
         'state_down']
 
     transitions = [
-         {'trigger': 'go_state_init',
-          'source': ['state_null', 'state_connected', 'state_down'],
-          'dest': 'state_init',
-          'before': 'do_state_init',
-          'after': 'post_init'},
-         {'trigger': 'go_state_connected',
-          'source': 'state_init',
-          'dest': 'state_connected',
-          'before': 'do_state_connected'},
-         {'trigger': 'go_state_up',
-          'source': ['state_connected', 'state_down'],
-          'dest': 'state_up',
-          'before': 'do_state_up'},
-         {'trigger': 'go_state_down',
-          'source': ['state_up'],
-          'dest': 'state_down',
-          'before': 'do_state_down',
-          'after': 'post_down'}]
+        {'trigger': 'go_state_init',
+         'source': ['state_null', 'state_connected', 'state_down'],
+         'dest': 'state_init',
+         'before': 'do_state_init',
+         'after': 'post_init'},
+        {'trigger': 'go_state_connected',
+         'source': 'state_init',
+         'dest': 'state_connected',
+         'before': 'do_state_connected'},
+        {'trigger': 'go_state_up',
+         'source': ['state_connected', 'state_down'],
+         'dest': 'state_up',
+         'before': 'do_state_up'},
+        {'trigger': 'go_state_down',
+         'source': ['state_up'],
+         'dest': 'state_down',
+         'before': 'do_state_down',
+         'after': 'post_down'}]
 
     def __init__(self, **kwargs):
         super(OpenoltDevice, self).__init__()
@@ -229,15 +226,10 @@ class OpenoltDevice(object):
                 onu_device.proxy_address.onu_id)
             uni_name = self.port_name(uni_no, Port.ETHERNET_UNI,
                                       serial_number=onu_device.serial_number)
-
-            if onu_device.adapter == 'brcm_openomci_onu':
-                self.log.debug('using-brcm_openomci_onu, update_interface '
-                               'down')
-                onu_adapter_agent = \
-                    registry('adapter_loader').get_agent(onu_device.adapter)
-                onu_adapter_agent.update_interface(onu_device,
-                                                   {'oper_state': 'down'})
-
+            onu_adapter_agent = \
+                registry('adapter_loader').get_agent(onu_device.adapter)
+            onu_adapter_agent.update_interface(onu_device,
+                                               {'oper_state': 'down'})
             self.onu_ports_down(onu_device, uni_no, uni_name, oper_state)
         # Children devices
         self.adapter_agent.update_child_devices_state(
@@ -472,7 +464,6 @@ class OpenoltDevice(object):
                            onu_id=onu_indication.onu_id)
             return
 
-
         if platform.intf_id_from_pon_port_no(onu_device.parent_port_no) \
                 != onu_indication.intf_id:
             self.log.warn('ONU-is-on-a-different-intf-id-now',
@@ -538,10 +529,8 @@ class OpenoltDevice(object):
             self.onu_ports_down(onu_device, uni_no, uni_name,
                                 OperStatus.DISCOVERED)
 
-            if onu_device.adapter == 'brcm_openomci_onu':
-                self.log.debug('using-brcm_openomci_onu')
-                onu_adapter_agent.update_interface(onu_device,
-                                                   {'oper_state': 'down'})
+            onu_adapter_agent.update_interface(onu_device,
+                                               {'oper_state': 'down'})
 
         elif onu_indication.oper_state == 'up':
 
@@ -560,37 +549,28 @@ class OpenoltDevice(object):
             # Device was in Discovered state, setting it to active
 
             # Prepare onu configuration
-            # If we are  brcm_openomci adapter proceed
 
+            # tcont creation (onu)
+            tcont = TcontsConfigData()
+            tcont.alloc_id = platform.mk_alloc_id(
+                onu_indication.intf_id, onu_indication.onu_id)
 
-            if onu_device.adapter == 'brcm_openomci_onu':
-                self.log.debug('using-brcm_openomci_onu')
+            # gem port creation
+            gem_port = GemportsConfigData()
+            gem_port.gemport_id = platform.mk_gemport_id(
+                onu_indication.intf_id,
+                onu_indication.onu_id)
 
-                # tcont creation (onu)
-                tcont = TcontsConfigData()
-                tcont.alloc_id = platform.mk_alloc_id(
-                    onu_indication.intf_id, onu_indication.onu_id)
+            gem_port.tcont_ref = str(tcont.alloc_id)
 
-                # gem port creation
-                gem_port = GemportsConfigData()
-                gem_port.gemport_id =  platform.mk_gemport_id(
-                    onu_indication.intf_id,
-                    onu_indication.onu_id)
+            self.log.info('inject-tcont-gem-data-onu-handler',
+                          onu_indication=onu_indication, tcont=tcont,
+                          gem_port=gem_port)
 
-                gem_port.tcont_ref = str(tcont.alloc_id)
-
-                self.log.info('inject-tcont-gem-data-onu-handler',
-                              onu_indication=onu_indication, tcont=tcont,
-                              gem_port=gem_port)
-
-                onu_adapter_agent.create_tcont(onu_device, tcont,
-                                               traffic_descriptor_data=None)
-                onu_adapter_agent.create_gemport(onu_device, gem_port)
-                onu_adapter_agent.create_interface(onu_device, onu_indication)
-
-            else:
-                self.log.error('unsupported-openolt-onu-adapter',
-                               onu_adapter=onu_device.adapter)
+            onu_adapter_agent.create_tcont(onu_device, tcont,
+                                           traffic_descriptor_data=None)
+            onu_adapter_agent.create_gemport(onu_device, gem_port)
+            onu_adapter_agent.create_interface(onu_device, onu_indication)
 
         else:
             self.log.warn('Not-implemented-or-invalid-value-of-oper-state',
@@ -648,27 +628,41 @@ class OpenoltDevice(object):
 
     def packet_indication(self, pkt_indication):
 
-        self.log.debug("packet indication", intf_id=pkt_indication.intf_id,
+        self.log.debug("packet indication",
+                       intf_type=pkt_indication.intf_type,
+                       intf_id=pkt_indication.intf_id,
                        gemport_id=pkt_indication.gemport_id,
                        flow_id=pkt_indication.flow_id)
 
-        onu_id = platform.onu_id_from_gemport_id(pkt_indication.gemport_id)
-        logical_port_num = platform.mk_uni_port_num(pkt_indication.intf_id,
-                                                    onu_id)
+        if pkt_indication.intf_type == "pon":
+            onu_id = platform.onu_id_from_gemport_id(pkt_indication.gemport_id)
+            logical_port_num = platform.mk_uni_port_num(pkt_indication.intf_id,
+                                                        onu_id)
+        elif pkt_indication.intf_type == "nni":
+            logical_port_num = platform.intf_id_to_port_no(
+                pkt_indication.intf_id,
+                Port.ETHERNET_NNI)
 
         pkt = Ether(pkt_indication.pkt)
-        kw = dict(logical_device_id=self.logical_device_id,
-                  logical_port_no=logical_port_num)
-        self.adapter_agent.send_packet_in(packet=str(pkt), **kw)
+
+        self.log.debug("packet indication",
+                       logical_device_id=self.logical_device_id,
+                       logical_port_no=logical_port_num)
+
+        self.adapter_agent.send_packet_in(
+            logical_device_id=self.logical_device_id,
+            logical_port_no=logical_port_num,
+            packet=str(pkt))
 
     def packet_out(self, egress_port, msg):
         pkt = Ether(msg)
-        self.log.info('packet out', egress_port=egress_port,
-                      packet=str(pkt).encode("HEX"))
+        self.log.debug('packet out', egress_port=egress_port,
+                       device_id=self.device_id,
+                       logical_device_id=self.logical_device_id,
+                       packet=str(pkt).encode("HEX"))
 
         # Find port type
         egress_port_type = self.port_type(egress_port)
-
         if egress_port_type == Port.ETHERNET_UNI:
 
             if pkt.haslayer(Dot1Q):
@@ -719,7 +713,7 @@ class OpenoltDevice(object):
     def send_proxied_message(self, proxy_address, msg):
         onu_device = self.adapter_agent.get_child_device(
             self.device_id, onu_id=proxy_address.onu_id,
-                parent_port_no=platform.intf_id_to_port_no(
+            parent_port_no=platform.intf_id_to_port_no(
                 proxy_address.channel_id, Port.PON_OLT)
         )
         if onu_device.connect_status != ConnectStatus.REACHABLE:
@@ -805,7 +799,6 @@ class OpenoltDevice(object):
         for i in range(4):
             mac = ':%02x' % ((port_no >> (i * 8)) & 0xff) + mac
         return '00:00' + mac
-
 
     def add_port(self, intf_id, port_type, oper_status):
         port_no = platform.intf_id_to_port_no(intf_id, port_type)
@@ -948,8 +941,8 @@ class OpenoltDevice(object):
             # Rebooting to reset the state
             self.reboot()
             # Removing logical device
-            self.proxy.remove('/logical_devices/{}'.
-                              format(self.logical_device_id))
+            ld = self.adapter_agent.get_logical_device(self.logical_device_id)
+            self.adapter_agent.delete_logical_device(ld)
         except Exception as e:
             self.log.error('Failure to delete openolt device', error=e)
             raise e
@@ -1026,4 +1019,3 @@ class OpenoltDevice(object):
 
     def simulate_alarm(self, alarm):
         self.alarm_mgr.simulate_alarm(alarm)
-
