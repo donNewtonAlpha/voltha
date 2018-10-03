@@ -27,7 +27,10 @@ fi
 
 kubectl delete -f $repopath/envoy_for_etcd_repo.yml
 kubectl delete -f $repopath/vcore_for_etcd_repo.yml 
+kubectl delete -f $repopath/vcli_repo.yml
+kubectl delete -f $repopath/ofagent_repo.yml
 kubectl delete -f $repopath/onos_repo.yml 
+kubectl delete -f $repopath/netconf_repo.yml
 
 sleep 2
 
@@ -59,5 +62,7 @@ sleep 5
 
 kubectl apply -f $repopath/vcore_for_etcd_repo.yml 
 kubectl apply -f $repopath/envoy_for_etcd_repo.yml
+kubectl apply -f $repopath/vcli_repo.yml
+kubectl apply -f $repopath/ofagent_repo.yml
 kubectl apply -f $repopath/onos_repo.yml 
-
+kubectl apply -f $repopath/netconf_repo.yml
