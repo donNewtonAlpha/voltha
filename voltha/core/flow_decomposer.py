@@ -727,7 +727,7 @@ class FlowDecomposer(object):
                     assert out_port_no is None
 
                     if get_metadata(flow) is not None:
-                        log.debug('creating-metadata-flow')
+                        log.debug('creating-metadata-flow', flow=flow)
                         # For downstream flows with dual-tags, recalculate route.
                         port_number = get_port_number_from_metadata(flow)
 
@@ -770,7 +770,7 @@ class FlowDecomposer(object):
                             ]
                         ))
                     else:
-                        log.debug('creating-standard-flow')
+                        log.debug('creating-standard-flow', flow=flow)
                         fl_lst, _ = device_rules.setdefault(
                             ingress_hop.device.id, ([], []))
                         fl_lst.append(mk_flow_stat(
