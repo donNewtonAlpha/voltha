@@ -67,7 +67,7 @@ sudo add-apt-repository "deb http://apt.kubernetes.io/ kubernetes-xenial main"
 Actually install the packages
 ```
 apt update
-apt install docker-ce kubelet kubeadm kubectl -y
+apt install docker-ce=17.03.3~ce-0~ubuntu-xenial kubelet=1.11.3-00 kubeadm=1.11.3-00 kubectl=1.11.3-00 kubernetes-cni=0.6.0-00 cri-tools=1.11.1-00 -y
 ```
 
 ### Private CA cert installation.

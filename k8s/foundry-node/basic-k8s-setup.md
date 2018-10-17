@@ -32,7 +32,7 @@ sudo add-apt-repository "deb http://apt.kubernetes.io/ kubernetes-xenial main"
 Install docker-ce, kubelet, kubeadm and kubectl from the newly added repos.
 ```
 sudo apt update
-sudo apt install docker-ce kubelet kubeadm kubectl -y
+sudo apt install docker-ce=17.03.3~ce-0~ubuntu-xenial kubelet=1.11.3-00 kubeadm=1.11.3-00 kubectl=1.11.3-00 kubernetes-cni=0.6.0-00 cri-tools=1.11.1-00 -y
 
 sudo systemctl stop docker
 sudo systemctl stop kubelet
