@@ -1,5 +1,4 @@
-#
-# Copyright 2018 the original author or authors.
+# Copyright 2018-present Tellabs, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,7 +14,7 @@
 #
 
 """
-BBSim adapter based on a acme adapter
+Tellabs OLT Adapter for tlabvolt4, tlabvolt8, tlabvolt16, & tlabvolt32
 """
 import structlog
 from copy import deepcopy
@@ -25,17 +24,12 @@ from voltha.protos.adapter_pb2 import AdapterConfig
 from voltha.protos.adapter_pb2 import Adapter
 from voltha.protos.common_pb2 import LogLevel
 from voltha.adapters.openolt.openolt import OpenoltAdapter, OpenOltDefaults
-from voltha.adapters.bbsimolt.bbsimolt_flow_mgr import BBSimOltFlowMgr
-from voltha.adapters.bbsimolt.bbsimolt_statistics import BBSimOltStatisticsMgr
-from voltha.adapters.bbsimolt.bbsimolt_bw import BBSimOltBW
-from voltha.adapters.bbsimolt.bbsimolt_alarms import BBSimOltAlarmMgr
-from voltha.adapters.bbsimolt.bbsimolt_platform import BBSimOltPlatform
-from voltha.adapters.bbsimolt.bbsimolt_device import BBSimOltDevice
+from voltha.adapters.openolt.openolt_device import OpenoltDevice
 
 log = structlog.get_logger()
 
-class BBSimOltAdapter(OpenoltAdapter):
-    name = 'bbsimolt'
+class TellabsAdapter(OpenoltAdapter):
+    name = 'tellabs_olt'
 
     supported_device_types = [
         DeviceType(
@@ -47,46 +41,34 @@ class BBSimOltAdapter(OpenoltAdapter):
     ]
 
     def __init__(self, adapter_agent, config):
-        super(BBSimOltAdapter, self).__init__(adapter_agent, config)
+        super(TellabsAdapter, self).__init__(adapter_agent, config)
 
         # overwrite the descriptor
         self.descriptor = Adapter(
             id=self.name,
-            vendor='CORD',
+            vendor='Tellabs Inc.',
             version='0.1',
             config=AdapterConfig(log_level=LogLevel.INFO)
         )
-        self.bbsim_id = 17  #TODO: This should be modified later
+
+        log.info('tellabs_olt.__init__', adapter=self.descriptor)
 
     def adopt_device(self, device):
-        self.bbsim_id += 1
         log.info('adopt-device', device=device)
 
         support_classes = deepcopy(OpenOltDefaults)['support_classes']
 
-        # Customize platform
-        support_classes['platform'] = BBSimOltPlatform
-        support_classes['flow_mgr'] = BBSimOltFlowMgr
-        support_classes['alarm_mgr'] = BBSimOltAlarmMgr
-        support_classes['stats_mgr'] = BBSimOltStatisticsMgr
-        support_classes['bw_mgr'] = BBSimOltBW
         kwargs = {
             'support_classes': support_classes,
             'adapter_agent': self.adapter_agent,
             'device': device,
-            'device_num': self.num_devices + 1,
-            'dp_id': '00:00:00:00:00:' + hex(self.bbsim_id)[-2:]
+            'device_num': self.num_devices + 1
         }
         try:
-            self.devices[device.id] = BBSimOltDevice(**kwargs)
+            self.devices[device.id] = OpenoltDevice(**kwargs)
         except Exception as e:
-            log.error('Failed to adopt BBSimOLT device', error=e)
+            log.error('Failed to adopt OpenOLT device', error=e)
             del self.devices[device.id]
             raise
         else:
             self.num_devices += 1
-
-    def delete_device(self, device):
-        self.bbsim_id -= 1
-        super(BBSimOltAdapter, self).delete_device(device)
-        self.num_devices -= 1

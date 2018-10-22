@@ -40,7 +40,7 @@ _ = third_party
 
 DEFAULT_MULTICAST_VLAN = 4000
 BROADCOM_UNTAGGED_VLAN = 4091                     # SEBA - For BBWF demo (BroadCom Default VLAN)
-DEFAULT_UTILITY_VLAN = BROADCOM_UNTAGGED_VLAN
+DEFAULT_UTILITY_VLAN = 4094
 DEFAULT_UNTAGGED_VLAN = BROADCOM_UNTAGGED_VLAN    # if RG does not send priority tagged frames
 
 _DEFAULT_RESTCONF_USERNAME = ""
@@ -695,7 +695,7 @@ class AdtranDeviceHandler(object):
 
         ld = LogicalDevice(
             # NOTE: not setting id and datapath_id will let the adapter agent pick id
-            desc=ofp_desc(mfr_desc=device.vendor,
+            desc=ofp_desc(mfr_desc='VOLTHA Project',
                           hw_desc=device.hardware_version,
                           sw_desc=version,
                           serial_num=device.serial_number,
