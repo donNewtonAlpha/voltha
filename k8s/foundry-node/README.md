@@ -21,13 +21,13 @@ https://github.com/etowah/seba-control-repo/blob/master/README.md
 Installing voltha using static yaml files.   This is what we typically do for day-to-day development iteration.   
 https://github.com/donNewtonAlpha/voltha/blob/master/k8s/foundry-node/basic-voltha-setup.md
 
-Install basic helm based voltha.  Keep this around until seba/xos (below) is ready.  
-https://github.com/donNewtonAlpha/voltha/blob/master/k8s/foundry-node/foundry-k8s-cluster/helm-voltha-simple.md
 
 Install full SEBA pod using helm (xos/onos/voltha).  This has also been tested on a single VM and a 3 server cluster.  
+
+Development oriented:
 https://github.com/donNewtonAlpha/voltha/blob/master/k8s/foundry-node/foundry-k8s-cluster/seba-pod-helm-setup.md  
 
-Or using the packaged/stable local helm charts using the new method  
+Release oriented:
 https://github.com/etowah/seba-control-repo/blob/master/helm-seba-voltha-install.txt
 
 
