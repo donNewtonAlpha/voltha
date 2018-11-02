@@ -20,6 +20,7 @@ from twisted.internet.defer import inlineCallbacks, returnValue, TimeoutError, f
 from voltha.extensions.omci.omci_me import *
 from voltha.extensions.omci.tasks.task import Task
 from voltha.extensions.omci.omci_defs import *
+from voltha.adapters.brcm_openomci_onu.uni_port import *
 
 OP = EntityOperations
 RC = ReasonCodes
@@ -84,8 +85,6 @@ class BrcmMibDownloadTask(Task):
 
         # TODO: only using a single UNI/ethernet port
         self._uni_port = self._handler.uni_ports[0]
-        self._uni_port_num = self._uni_port.mac_bridge_port_num
-        self._ethernet_uni_entity_id = self._uni_port.entity_id
 
         # Port numbers
         self._pon_port_num = 3  # TODO why 3.  maybe this is the ani port number.  look at anis list
@@ -344,16 +343,26 @@ class BrcmMibDownloadTask(Task):
             #            - Nothing
             #  References:
             #            - MAC Bridge Service Profile (the bridge)
-            #            - PPTP Ethernet UNI
+            #            - PPTP Ethernet or VEIP UNI
 
             # TODO: do this for all uni/ports...
             # TODO: magic. make a static variable for tp_type
+
+            # default to PPTP
+            tp_type = None
+            if self._uni_port.type is UniType.VEIP:
+                tp_type = 11
+            elif self._uni_port.type is UniType.PPTP:
+                tp_type = 1
+            else:
+                tp_type = 1
+
             msg = MacBridgePortConfigurationDataFrame(
-                self._ethernet_uni_entity_id,            # Entity ID - This is read-only/set-by-create !!!
+                self._uni_port.entity_id,            # Entity ID - This is read-only/set-by-create !!!
                 bridge_id_pointer=self._mac_bridge_service_profile_entity_id,  # Bridge Entity ID
-                port_num=self._uni_port_num,          # Port ID
-                tp_type=1,                            # PPTP Ethernet UNI
-                tp_pointer=self._ethernet_uni_entity_id     # Ethernet UNI ID
+                port_num=self._uni_port.mac_bridge_port_num,   # Port ID
+                tp_type=tp_type,                               # PPTP Ethernet or VEIP UNI
+                tp_pointer=self._uni_port.entity_id            # Ethernet UNI ID
             )
             frame = msg.create()
             self.log.debug('openomci-msg', msg=msg)
@@ -476,58 +485,42 @@ class BrcmMibDownloadTask(Task):
             #  EntityID relates to the VLAN TCIS
             #  References:
             #            - VLAN TCIS from previously created VLAN Tagging filter data
-            #            - PPTP Ethernet UNI
+            #            - PPTP Ethernet or VEIP UNI
             #
 
             # TODO: do this for all uni/ports...
             # TODO: magic.  static variable for assoc_type
+
+            # default to PPTP
+            association_type = None
+            if self._uni_port.type is UniType.VEIP:
+                association_type = 10
+            elif self._uni_port.type is UniType.PPTP:
+                association_type = 2
+            else:
+                association_type = 2
+
             attributes = dict(
-                association_type=2,                                 # Assoc Type, PPTP Ethernet UNI
-                associated_me_pointer=self._ethernet_uni_entity_id  # Assoc ME, PPTP Entity Id
-            )
+                association_type=association_type,                  # Assoc Type, PPTP/VEIP Ethernet UNI
+                associated_me_pointer=self._uni_port.entity_id,     # Assoc ME, PPTP/VEIP Entity Id
 
-            msg = ExtendedVlanTaggingOperationConfigurationDataFrame(
-                self._mac_bridge_service_profile_entity_id,  # Bridge Entity ID
-                attributes=attributes
-            )
-            frame = msg.create()
-            self.log.debug('openomci-msg', msg=msg)
-            results = yield omci_cc.send(frame)
-            self.check_status_and_state(results, 'create-extended-vlan-tagging-operation-configuration-data')
-
-            ################################################################################
-            # Update Extended VLAN Tagging Operation Config Data
-            #
-            # Specifies the TPIDs in use and that operations in the downstream direction are
-            # inverse to the operations in the upstream direction
-
-            # TODO: magic.  static variable for downstream_mode
-            attributes = dict(
+                # Specifies the TPIDs in use and that operations in the downstream direction are
+                # inverse to the operations in the upstream direction
                 input_tpid=self._input_tpid,    # input TPID
                 output_tpid=self._output_tpid,  # output TPID
                 downstream_mode=0,              # inverse of upstream
-            )
-            msg = ExtendedVlanTaggingOperationConfigurationDataFrame(
-                self._mac_bridge_service_profile_entity_id,  # Bridge Entity ID
-                attributes=attributes
-            )
-            frame = msg.set()
-            self.log.debug('openomci-msg', msg=msg)
-            results = yield omci_cc.send(frame)
-            self.check_status_and_state(results, 'set-extended-vlan-tagging-operation-configuration-data')
 
-            ################################################################################
-            # Update Extended VLAN Tagging Operation Config Data
-            #
-            # parameters: Entity Id ( 0x900), Filter Inner Vlan Id(0x1000-4096,do not filter on Inner vid,
-            #             Treatment Inner Vlan Id : 2
+                # parameters: Entity Id ( 0x900), Filter Inner Vlan Id(0x1000-4096,do not filter on Inner vid,
+                #             Treatment Inner Vlan Id : 2
 
-            # Update uni side extended vlan filter
-            # filter for untagged
-            # probably for eapol
-            # TODO: lots of magic
-            # TODO: magic 0x1000 / 4096?
-            attributes = dict(
+                # Update uni side extended vlan filter
+                # filter for untagged
+                # probably for eapol
+                # TODO: lots of magic
+                # TODO: magic 0x1000 / 4096?
+
+                # See VOL-1311 - Need to set table during create to avoid exception
+                # trying to read back table during post-create-read-missing-attributes
                 received_frame_vlan_tagging_operation_table=
                 VlanTaggingOperation(
                     filter_outer_priority=15,  # This entry is not a double-tag rule
@@ -549,14 +542,15 @@ class BrcmMibDownloadTask(Task):
                     treatment_inner_tpid_de=4,
                 )
             )
+
             msg = ExtendedVlanTaggingOperationConfigurationDataFrame(
                 self._mac_bridge_service_profile_entity_id,  # Bridge Entity ID
-                attributes=attributes         # See above
+                attributes=attributes
             )
-            frame = msg.set()
+            frame = msg.create()
             self.log.debug('openomci-msg', msg=msg)
             results = yield omci_cc.send(frame)
-            self.check_status_and_state(results, 'set-extended-vlan-tagging-operation-configuration-data-untagged')
+            self.check_status_and_state(results, 'create-extended-vlan-tagging-operation-configuration-data')
 
         except TimeoutError as e:
             self.log.warn('rx-timeout-2', e=e)
@@ -590,12 +584,21 @@ class BrcmMibDownloadTask(Task):
         #            - Nothing
         try:
             state = 1 if force_lock or not uni_port.enabled else 0
-            msg = PptpEthernetUniFrame(uni_port.entity_id,
-                                       attributes=dict(administrative_state=state))
-            frame = msg.set()
-            self.log.debug('openomci-msg', msg=msg)
-            results = yield omci_cc.send(frame)
-            self.check_status_and_state(results, 'set-pptp-ethernet-uni-lock-restore')
+            msg = None
+            if (uni_port.type is UniType.PPTP):
+                msg = PptpEthernetUniFrame(uni_port.entity_id,
+                                           attributes=dict(administrative_state=state))
+            elif (uni_port.type is UniType.VEIP):
+                msg = VeipUniFrame(uni_port.entity_id,
+                                   attributes=dict(administrative_state=state))
+            else:
+                self.log.warn('unknown-uni-type', uni_port=uni_port)
+
+            if msg:
+               frame = msg.set()
+               self.log.debug('openomci-msg', msg=msg)
+               results = yield omci_cc.send(frame)
+               self.check_status_and_state(results, 'set-pptp-ethernet-uni-lock-restore')
 
         except TimeoutError as e:
             self.log.warn('rx-timeout', e=e)
