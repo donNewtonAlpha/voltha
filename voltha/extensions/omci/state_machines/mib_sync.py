@@ -170,6 +170,11 @@ class MibSynchronizer(object):
                                queued=True,
                                name='{}-{}'.format(self.__class__.__name__,
                                                    device_id))
+        try:
+            import logging
+            logging.getLogger('transitions').setLevel(logging.WARNING)
+        except Exception as e:
+            self.log.exception('log-level-failed', e=e)
 
     def _cancel_deferred(self):
         d1, self._deferred = self._deferred, None
@@ -380,7 +385,7 @@ class MibSynchronizer(object):
         self._mib_data_sync = self._database.get_mib_data_sync(self._device_id) or 0
 
         def success(onu_mds_value):
-            self.log.debug('examine-mds-success', mds_value=onu_mds_value)
+            self.log.debug('examine-mds-success', onu_mds_value=onu_mds_value, olt_mds_value=self.mib_data_sync)
             self._current_task = None
 
             # Examine MDS value
@@ -432,13 +437,13 @@ class MibSynchronizer(object):
                                       self._on_olt_only_diffs is None
 
         def success(onu_mds_value):
-            self.log.debug('examine-mds-success', mds_value=onu_mds_value)
+            self.log.debug('reconcile-success', mds_value=onu_mds_value)
             self._current_task = None
             self._next_resync = datetime.utcnow() + timedelta(seconds=self._resync_delay)
             self._deferred = reactor.callLater(0, self.success)
 
         def failure(reason):
-            self.log.info('examine-mds-failure', reason=reason)
+            self.log.info('reconcile-failure', reason=reason)
             self._current_task = None
             self._deferred = reactor.callLater(self._timeout_delay, self.timeout)
 
@@ -475,7 +480,7 @@ class MibSynchronizer(object):
             self._deferred = reactor.callLater(0, self.force_resync)
         else:
             def success(onu_mds_value):
-                self.log.debug('get-mds-success', mds_value=onu_mds_value)
+                self.log.debug('audit-success', onu_mds_value=onu_mds_value, olt_mds_value=self.mib_data_sync)
                 self._current_task = None
 
                 # Examine MDS value
@@ -486,7 +491,7 @@ class MibSynchronizer(object):
                     self._deferred = reactor.callLater(0, self.mismatch)
 
             def failure(reason):
-                self.log.info('get-mds-failure', reason=reason)
+                self.log.info('audit-failure', reason=reason)
                 self._current_task = None
                 self._deferred = reactor.callLater(self._timeout_delay, self.timeout)
 
@@ -843,7 +848,7 @@ class MibSynchronizer(object):
                         if modified:
                             self.increment_mib_data_sync()
 
-            except KeyError as e:
+            except KeyError as _e:
                 pass            # NOP
             except Exception as e:
                 self.log.exception('set', e=e)

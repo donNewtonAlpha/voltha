@@ -79,6 +79,10 @@ class AdapterAgent(object):
         self.log = structlog.get_logger(adapter_name=adapter_name)
         self._onu_detect_event_subscriptions = {}
 
+    @property
+    def name(self):
+        return self.adapter_name
+        
     @inlineCallbacks
     def start(self):
         self.log.debug('starting')
@@ -1049,3 +1053,4 @@ class AdapterAgent(object):
     def forward_onu_detect_state(self, device_id, state):
         topic = self._gen_onu_detect_proxy_address_topic(device_id)
         self.event_bus.publish(topic, state)
+

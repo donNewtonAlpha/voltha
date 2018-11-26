@@ -26,16 +26,15 @@ class OnuTCont(object):
     """
     Broadcom ONU specific implementation
     """
-    def __init__(self, handler, alloc_id, traffic_descriptor,
-                 name=None, vont_ani=None):
+    def __init__(self, handler, alloc_id, q_sched_policy, traffic_descriptor):
 
         self.log = structlog.get_logger(device_id=handler.device_id, alloc_id=alloc_id)
         self.log.debug('function-entry')
 
         self.alloc_id = alloc_id
+        self._q_sched_policy = 0
+        self.q_sched_policy = q_sched_policy
         self.traffic_descriptor = traffic_descriptor
-        self.name = name
-        self.vont_ani = vont_ani        # (string) reference
 
         self._handler = handler
         self._entity_id = None
@@ -45,6 +44,20 @@ class OnuTCont(object):
         self.log.debug('function-entry')
         return self._entity_id
 
+    @property
+    def q_sched_policy(self):
+        self.log.debug('function-entry')
+        return self._q_sched_policy
+
+
+    @q_sched_policy.setter
+    def q_sched_policy(self, q_sched_policy):
+        sp = ('Null', 'WRR', 'StrictPriority')
+        if q_sched_policy in sp:
+            self._q_sched_policy = sp.index(q_sched_policy)
+        else:
+            self._q_sched_policy = 0
+
     @staticmethod
     def create(handler, tcont, td):
         log = structlog.get_logger(tcont=tcont, td=td)
@@ -52,9 +65,9 @@ class OnuTCont(object):
 
         return OnuTCont(handler,
                         tcont['alloc-id'],
-                        td,
-                        name=tcont['name'],
-                        vont_ani=tcont['vont-ani'])
+                        tcont['q_sched_policy'],
+                        td
+                        )
 
     @inlineCallbacks
     def add_to_hardware(self, omci, tcont_entity_id):
@@ -64,9 +77,12 @@ class OnuTCont(object):
         self._entity_id = tcont_entity_id
 
         try:
+            # FIXME: self.q_sched_policy seems to be READ-ONLY
+            # Ideally the READ-ONLY or NOT attribute is available from ONU-2G ME
+            #msg = TcontFrame(self.entity_id, self.alloc_id, self.q_sched_policy)
             msg = TcontFrame(self.entity_id, self.alloc_id)
             frame = msg.set()
-            self.log.debug('openomci-msg', msg=msg)
+            self.log.debug('openomci-msg', omci_msg=msg)
             results = yield omci.send(frame)
             self.check_status_and_state(results, 'set-tcont')
 
@@ -87,7 +103,7 @@ class OnuTCont(object):
         try:
             msg = TcontFrame(self.entity_id, 0xFFFF)
             frame = msg.set()
-            self.log.debug('openomci-msg', msg=msg)
+            self.log.debug('openomci-msg', omci_msg=msg)
             results = yield omci.send(frame)
             self.check_status_and_state(results, 'delete-tcont')
 
@@ -97,7 +113,6 @@ class OnuTCont(object):
 
         returnValue(results)
 
-
     def check_status_and_state(self, results, operation=''):
         self.log.debug('function-entry')
         omci_msg = results.fields['omci_message'].fields
@@ -106,7 +121,8 @@ class OnuTCont(object):
         failed_mask = omci_msg.get('failed_attributes_mask', 'n/a')
         unsupported_mask = omci_msg.get('unsupported_attributes_mask', 'n/a')
 
-        self.log.debug("OMCI Result:", operation, omci_msg=omci_msg, status=status, error_mask=error_mask,
+        self.log.debug("OMCI Result: %s", operation, omci_msg=omci_msg,
+                       status=status, error_mask=error_mask,
                        failed_mask=failed_mask, unsupported_mask=unsupported_mask)
 
         if status == RC.Success:
