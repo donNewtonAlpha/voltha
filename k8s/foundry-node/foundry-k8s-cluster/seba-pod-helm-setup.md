@@ -32,7 +32,7 @@ mkdir -p source
 cd ~/source
 git clone https://github.com/donNewtonAlpha/voltha.git
 git clone https://github.com/donNewtonAlpha/helm-charts.git
-git clone https://bitbucket.org/onfcord/podconfigs.git
+git clone https://github.com/etowah/seba-control-repo.git
 cd ~/
 
 # this may exists if you used previous notes
@@ -56,26 +56,10 @@ helm repo list
 Install Kafka and etcd-operator from hosted repos
 ```
 helm install -n cord-kafka incubator/kafka --version 0.8.8 --set persistence.enabled=false --set zookeeper.persistence.enabled=false
-helm install -n etcd-operator stable/etcd-operator
+helm install -n etcd-operator stable/etcd-operator --version 0.8.0 
 
 # wait until the etcd CustomResourceDefinitions are added
 kubectl get crd | grep etcd
-```
-
-
-Install an etcd-operator managed etcd cluster.  This is done separately from installing etcd-operator to prevent etcd cluster startup errors and to allow for some etcd tuning.
-```
-helm install -n etcd-cluster etcd-cluster
-
-# wait until all 3 etcd-cluster-XXXX are Running
-kubectl get pods -o wide |grep etcd-cluster
-```
-
-
-Install nem-monitoring.  prometheus and grafana
-```
-helm dep update nem-monitoring
-helm install -n nem-monitoring nem-monitoring
 ```
 
 
@@ -86,7 +70,7 @@ helm install -n xos-core xos-core -f ~/foundry-k8s-cluster/att-seba-voltha-value
 ```
 
 
-Install voltha.  Note the custom values.  There we define the docker images we want to run, and the kafka that we want voltha to share with xos and onos.  Also disable creating an etcd-operator instance as part of this install as it was done already above.
+Install voltha.  Note the custom values.  There we define the docker images we want to run, and the kafka that we want voltha to share with xos and onos.
 ```
 helm dep update voltha
 helm install -n voltha voltha -f ~/foundry-k8s-cluster/att-seba-voltha-values.yaml
@@ -131,19 +115,35 @@ TODO: grab a screencap
 
 Below is where provisioning starts.  These are specific to the QA pod so change yaml files to match your environment.  Replace localip with whichever k8s host has the available NodePorts.   See kubectl get svc.  These TOSCA files being curl'ed into the pod represent the provisioning steps needed to build a pod, add an olt, add an onu, and then add a subscriber.   These ultimately would be called upon by an OSS system, using either gRPC or RESTful calls.  But for now we use curl to get things going. 
 ```
-cd ~/source/podconfigs/tosca/att-workflow
+cd ~/source/seba-control-repo/provisioning-yaml/
 ```
 
-Load radius server config into onos voltha.  You may need to replace foundry-simple-netcfg.json with foundry-full-netcfg.json depending on if xos syncronizers can fully populate/query sadis.  Replace master0 with one of your k8s host's IP addresses.  If using a previous k8s install guide master0 should already be in /etc/hosts on each host.
+Load radius server config into onos voltha.  Replace seba-node1 with one of your k8s host's IP addresses.
 ```
-~/foundry-k8s-cluster/quick-onos-update.sh master0 foundry-simple-netcfg.json
+~/source/seba-control-repo/scripts/quick-onos-update.sh seba-node1 radius-netcfg.json
 ```
 
-Run the tosca model additions to create pod, olt line card, onu whitelist additions, and actual subscriber data.  One important difference from previous voltha installs is you do NOT have to preprovision or enable the OLT via the voltha cli.   The API provisioning of the foundry-pod-olt.yaml below does that step.  You DO still need to start bal_core_dist and openolt on the edgecore itself.
+Run the tosca model additions to create pod, olt line card, onu whitelist additions, and actual subscriber data.  One important difference from previous voltha installs is you do NOT have to preprovision or enable the OLT via the voltha cli.   The API provisioning of the pod-olt.yaml below does that step.  You DO still need to start bal_core_dist and openolt on the edgecore itself.
 ```
-curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --data-binary @foundry-pod-olt.yaml http://master0:30007/run
-curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --data-binary @foundry-whitelist.yaml http://master0:30007/run
-curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --data-binary @foundry-subscribers.yaml http://master0:30007/run
+# Provision POD OLT and test ONU/RG
+
+# Should now be ready to use abstract-olt or manual yaml to provision pod OLT, whitelist, and subscriber.
+# TODO: add abstract-olt commands instead
+
+# Edit pod-olt.yaml, replace IP of your Edgecore OLT running bal and openolt
+curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --data-binary @provisioning-yaml/pod-olt.yaml http://seba-node1:30007/run
+# Use vcli, verify olt is added and any onu go into omci-admin-lock state
+
+# Modify whitelist for ONU plugged into proper ports.  Replace of:XXXX device id with parent_port_id from olt in vcli
+curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --data-binary @provisioning-yaml/whitelist.yaml http://seba-node1:30007/run
+# Use vcli, devices, verify onu go into discovered state.  use onos cli, log:tail, verify RG are attempting to auth AND FAILING.
+
+# Modify subscribers for ONU, nas-port-id, and vlans to be used by subscribers
+curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --data-binary @provisioning-yaml/subscribers.yaml http://seba-node1:30007/run
+# Use onos cli, log:tail, verify RG are attempting to auth succeed.
+# Also verify kafka app picks it up and SUBSCRIBER_REGISTERED is shown.  
+# In onos cli, run aaa-users, volt-subscribers, volt-programmed-subscribers, and dhcpl2relay-allocations
+# Use vcli, verify onu state is omci-flows-pushed.
 ```
 
 At this point plug in ONU and RG that can authenticate to the ATT lab radius server.  VLANS should be pushed on successfull eap authentication and traffic pass all the way out to the BNG.
