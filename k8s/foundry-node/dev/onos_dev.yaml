@@ -1,0 +1,312 @@
+---
+# Copyright 2017-present Open Networking Foundation
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: onos
+data:
+  logCfg: |
+   
+    # Root logger
+    log4j.rootLogger=INFO, out, json, osgi:*, stdout
+    log4j.throwableRenderer=org.apache.log4j.OsgiThrowableRenderer
+    
+    # CONSOLE appender not used by default
+    log4j.appender.stdout=org.apache.log4j.ConsoleAppender
+    log4j.appender.stdout.layout=org.apache.log4j.PatternLayout
+    log4j.appender.stdout.layout.ConversionPattern=%d{ISO8601} | %-5.5p | %-16.16t | %-32.32c{1} | %X{bundle.id} - %X{bundle.name} - %X{bundle.version} | %m%n
+    
+    # File appender
+    log4j.appender.out=org.apache.log4j.RollingFileAppender
+    log4j.appender.out.layout=org.apache.log4j.PatternLayout
+    log4j.appender.out.layout.ConversionPattern=%d{ISO8601} | %-5.5p | %-16.16t | %-32.32c{1} | %X{bundle.id} - %X{bundle.name} - %X{bundle.version} | %m%n
+    log4j.appender.out.file=${karaf.data}/log/karaf.log
+    log4j.appender.out.append=true
+    log4j.appender.out.maxFileSize=10MB
+    log4j.appender.out.maxBackupIndex=10
+    
+    # JSON-ish appender (doesn't handle quotes in fields correctly)
+    # docs: https://logging.apache.org/log4j/1.2/apidocs/org/apache/log4j/PatternLayout.html
+    log4j.appender.json=org.apache.log4j.RollingFileAppender
+    log4j.appender.json.layout=org.apache.log4j.PatternLayout
+    log4j.appender.json.layout.ConversionPattern={"@timestamp":"%d{yyyy-MM-dd'T'HH:mm:ss.SSS'Z'}","levelname":"%p","threadName":"%t","category":"%c{1}","bundle.id":"%X{bundle.id}","bundle.name":"%X{bundle.name}","bundle.version":"%X{bundle.version}","message":"%m"}%n
+    log4j.appender.json.file=${karaf.data}/log/karaf_json.log
+    log4j.appender.json.append=true
+    log4j.appender.json.maxFileSize=10MB
+    log4j.appender.json.maxBackupIndex=10
+    
+    # Sift appender - one logfile per bundle ID
+    log4j.appender.sift=org.apache.log4j.sift.MDCSiftingAppender
+    log4j.appender.sift.key=bundle.name
+    log4j.appender.sift.default=karaf
+    log4j.appender.sift.appender=org.apache.log4j.FileAppender
+    log4j.appender.sift.appender.layout=org.apache.log4j.PatternLayout
+    log4j.appender.sift.appender.layout.ConversionPattern=%d{ISO8601} | %-5.5p | %-16.16t | %-32.32c{1} | %m%n
+    log4j.appender.sift.appender.file=${karaf.data}/log/$\\{bundle.name\\}.log
+    log4j.appender.sift.appender.append=true
+    
+    # Application logs
+---
+
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: log-agent-configmap
+data:
+  config: |
+    ---
+    # filebeat configuration for ONOS
+    filebeat.inputs:
+      - type: log
+        paths:
+          - "/onos_logs/karaf_json.log"
+
+        fields_under_root: true
+
+        json.keys_under_root: true
+        json.add_error_key: true
+        json.overwrite_keys: true
+        json.message_key: "message"
+
+        multiline.pattern: '^[[:space:]]'
+        multiline.negate: false
+        multiline.match: after
+
+    # remove unneeded fields
+    processors:
+      - drop_fields:
+          fields: ["host", "prospector", "input"]
+
+    output.kafka:
+      hosts: ["cord-kafka:9092"]
+      topic: 'onos.log'
+      key: '%{[bundle.name]}'
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: onos-debugger
+  namespace: default
+  labels:
+    app: onos
+    chart: onos-1.1.0
+    release: onos
+    heritage: Tiller
+spec:
+  type: NodePort
+  ports:
+  - name: debugger
+    nodePort: 30555
+    port: 5005
+    
+  selector:
+    app: onos
+    release: onos
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: onos-openflow
+  namespace: default
+  labels:
+    app: onos
+    chart: onos-1.1.0
+    release: onos
+    heritage: Tiller
+spec:
+  type: NodePort
+  ports:
+  - name: openflow
+    nodePort: 31653
+    port: 6653
+    
+  selector:
+    app: onos
+    release: onos
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: onos-ovsdb
+  namespace: default
+  labels:
+    app: onos
+    chart: onos-1.1.0
+    release: onos
+    heritage: Tiller
+spec:
+  type: ClusterIP
+  ports:
+  - name: ovsdb
+    port: 6640
+    
+  selector:
+    app: onos
+    release: onos
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: onos-ssh
+  namespace: default
+  labels:
+    app: onos
+    chart: onos-1.1.0
+    release: onos
+    heritage: Tiller
+spec:
+  type: NodePort
+  ports:
+  - name: ssh
+    nodePort: 30115
+    port: 8101
+    
+  selector:
+    app: onos
+    release: onos
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: onos-ui
+  namespace: default
+  labels:
+    app: onos
+    chart: onos-1.1.0
+    release: onos
+    heritage: Tiller
+spec:
+  type: NodePort
+  ports:
+  - name: ui
+    nodePort: 30120
+    port: 8181
+    
+  selector:
+    app: onos
+    release: onos
+
+---
+
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: onos
+  namespace: default
+  labels:
+    app: onos
+    chart: onos-1.1.0
+    release: onos
+    heritage: Tiller
+    xos_service: ONOS
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: onos
+      release: onos
+  template:
+    metadata:
+      labels:
+        app: onos
+        release: onos
+        xos_service: ONOS
+    spec:
+      serviceAccount: default
+      serviceAccountName: default
+      containers:
+        - name: onos
+          image:  "docker-repo.dev.atl.foundry.att.com:5000/voltha-onos:matt-test"
+          imagePullPolicy: Always
+          command: ["./bin/onos-service", "server", "debug"]
+          env:
+            - name: ONOS_APPS
+              value: drivers,openflow-base
+            
+          ports:
+            - name: ovsdb
+              containerPort: 6640
+            - name: openflow
+              containerPort: 6653
+            - name: ssh
+              containerPort: 8101
+            - name: ui
+              containerPort: 8181
+            - name: cluster
+              containerPort: 9876
+            - name: debugger
+              containerPort: 5005
+          resources:
+            {}
+            
+          volumeMounts:
+            - name: node-key
+              mountPath: /root/vtn
+              readOnly: true
+            - name: onos-logs-cfg
+              mountPath: /root/onos/apache-karaf-3.0.8/etc/org.ops4j.pax.logging.cfg
+              subPath: org.ops4j.pax.logging.cfg
+            - name: onos-logs
+              mountPath: /root/onos/apache-karaf-3.0.8/data/log
+        - name: onos-log-agent
+          image: "docker.elastic.co/beats/filebeat-oss:6.4.2"
+          imagePullPolicy: IfNotPresent
+          args: [ "-c", "/conf/filebeat.yml", "-e" ]
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          volumeMounts:
+            - name: onos-logs
+              mountPath: /onos_logs
+            - name: log-agent-configmap-volume
+              mountPath: /conf
+      volumes:
+        - name: node-key
+          secret:
+            secretName: node-key
+            defaultMode: 256
+            optional: true
+        - name: onos-logs-cfg
+          configMap:
+            name: onos
+            items:
+              - key: logCfg
+                path: org.ops4j.pax.logging.cfg
+        - name: onos-logs
+          emptyDir: {}
+        - name: log-agent-configmap-volume
+          configMap:
+            name: log-agent-configmap
+            items:
+              - key: config
+                path: filebeat.yml
+

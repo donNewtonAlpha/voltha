@@ -1,0 +1,13 @@
+
+cd ~/source/helm-charts/
+helm install -n cord-kafka -f examples/kafka-single.yaml kafka
+helm install -n etcd-operator etcd-operator
+
+cd ~/source/voltha/k8s/foundry-node/dev/
+./dev-setup.sh deploy
+
+# dev iteration
+./etcd-clean.sh purge
+# or
+./dev-setup.sh redeploy
+
