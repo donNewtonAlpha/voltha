@@ -6,6 +6,14 @@ helm repo add incubator https://kubernetes-charts-incubator.storage.googleapis.c
 helm install -n cord-kafka incubator/kafka -f examples/kafka-single.yaml
 helm install -n etcd-operator stable/etcd-operator
 
+# wait for etcdcluster CRD
+kubectl get crd |grep etcdclusters
+
+# create local storage impersonation
+sudo mkdir -p /var/lib/voltha-runtime
+sudo chown -R $(id -u):$(id -g) /var/lib/voltha-runtime
+
+
 # Deploy dev voltha/onos
 cd ~/source/voltha/k8s/foundry-node/dev/
 ./dev-setup.sh deploy

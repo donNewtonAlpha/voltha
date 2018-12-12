@@ -261,7 +261,6 @@ spec:
               containerPort: 5005
           resources:
             {}
-            
           volumeMounts:
             - name: node-key
               mountPath: /root/vtn
@@ -271,6 +270,8 @@ spec:
               subPath: org.ops4j.pax.logging.cfg
             - name: onos-logs
               mountPath: /root/onos/apache-karaf-3.0.8/data/log
+            - name: onos-net-config
+              mountPath: /root/onos/config/network-cfg.json
         - name: onos-log-agent
           image: "docker.elastic.co/beats/filebeat-oss:6.4.2"
           imagePullPolicy: IfNotPresent
@@ -309,4 +310,7 @@ spec:
             items:
               - key: config
                 path: filebeat.yml
-
+        - name: onos-net-config
+          hostPath:
+            path: /var/lib/voltha-runtime/network-cfg.json
+            type: File

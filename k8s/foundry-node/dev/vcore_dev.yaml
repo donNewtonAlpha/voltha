@@ -83,4 +83,11 @@ spec:
               name: mystery-port
             - containerPort: 50556
               name: grpc-port
-
+          volumeMounts:
+            - name: vcore-logconfig-vol
+              mountPath: /voltha/voltha/logconfig.yml
+      volumes:
+        - name: vcore-logconfig-vol
+          hostPath:
+            path: /var/lib/voltha-runtime/logconfig.yml
+            type: File
