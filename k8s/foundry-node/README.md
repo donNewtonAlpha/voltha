@@ -6,12 +6,12 @@ These are some of the documents we (Foundry) refer to when building out kubernet
 ## Kubernetes Builds
 
 Setup a basic k8s single instance, good for anything needing a k8s environment.  Not specific to voltha. Basically just a single kubeadm based setup.  
-https://github.com/donNewtonAlpha/voltha/blob/master/k8s/foundry-node/basic-k8s-setup.md
+https://github.com/etowah/seba-control-repo/blob/master/simple-kubeadm-setup.txt
 
 Setup a 3 server k8s cluster using kubespray.  Capable of being installed offline if images/artifacts are gathered.  The old way is no longer needed (and was too complicated).  Simple online kubespray way.    
 https://github.com/etowah/seba-control-repo/blob/master/simple-kubespray-setup.txt
 
-The specifics for an offline setup.  Much more detail on ansible capabilities here:  
+The specifics for a fully offline setup, lots of prep work required.  Much more detail on ansible capabilities here:  
 https://github.com/etowah/seba-control-repo/blob/master/README.md
 
 
@@ -24,10 +24,10 @@ https://github.com/donNewtonAlpha/voltha/blob/master/k8s/foundry-node/basic-volt
 
 Install full SEBA pod using helm (xos/onos/voltha).  This has also been tested on a single VM and a 3 server cluster.  
 
-Development oriented:
+Online/Development installation:
 https://github.com/donNewtonAlpha/voltha/blob/master/k8s/foundry-node/foundry-k8s-cluster/seba-pod-helm-setup.md  
 
-Release oriented:
+Offline Release installation:
 https://github.com/etowah/seba-control-repo/blob/master/helm-seba-voltha-install.txt
 
 
