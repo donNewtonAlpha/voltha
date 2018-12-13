@@ -1,0 +1,130 @@
+{
+  "devices" : {
+    "of:000000000a4001cd" : {
+      "accessDevice" : {
+        "uplink" : "65536",
+        "vlan" : "10"
+      },
+      "basic" : {
+        "driver" : "pmc-olt"
+      }
+    },
+    "of:000000000a4001ce" : {
+      "basic" : {
+        "driver" : "pmc-olt"
+      },
+      "accessDevice" : {
+        "uplink" : "65536",
+        "vlan" : "11"
+      }
+    },
+    "of:000000000a4001cf" : {
+      "basic" : {
+        "driver" : "pmc-olt"
+      },
+      "accessDevice" : {
+        "uplink" : "65536",
+        "vlan" : "12"
+      }
+    },
+    "of:000000000a4001d0" : {
+      "basic" : {
+        "driver" : "pmc-olt"
+      },
+      "accessDevice" : {
+        "uplink" : "65536",
+        "vlan" : "13"
+      }
+    },
+    "of:000000000af20b15" : {
+      "basic" : {
+        "driver" : "pmc-olt"
+      },
+      "accessDevice" : {
+        "uplink" : "65536",
+        "vlan" : "10"
+      }
+    }
+  },
+  "apps" : {
+    "org.opencord.dhcpl2relay" : {
+      "dhcpl2relay" : {
+        "useOltUplinkForServerPktInOut" : true
+      }
+    },
+    "org.opencord.aaa" : {
+      "AAA" : {
+        "radiusIp" : "10.10.3.39",
+        "radiusServerPort" : "1645",
+        "radiusSecret" : "lightspeed",
+        "nasIp" : "10.253.10.1",
+        "radiusConnectionType" : "socket",
+        "packetCustomizer" : "sample"
+      }
+    },
+    "org.opencord.sadis" : {
+      "sadis" : {
+        "integration" : {
+          "cache" : {
+            "enabled" : true,
+            "maxsize" : 50,
+            "ttl" : "PT1m"
+          }
+        },
+        "entries" : [ {
+         "id" : "10.64.1.205:9191",
+          "uplinkPort" : 65536,
+          "hardwareIdentifier" : "a8:2b:b5:36:76:9e",
+          "ipAddress" : "10.64.1.205",
+          "nasId" : "ATLEDGEVOLT1"
+        }, {
+          "id" : "10.64.1.206:9191",
+          "uplinkPort" : 65536,
+          "hardwareIdentifier" : "a8:2b:b5:36:78:ae",
+          "ipAddress" : "10.64.1.206",
+          "nasId" : "ATLEDGEVOLT1"
+        }, {
+          "id" : "10.64.1.207:9191",
+          "uplinkPort" : 65536,
+          "hardwareIdentifier" : "3c:2c:99:f7:c6:82",
+          "ipAddress" : "10.64.1.207",
+          "nasId" : "ATLEDGEVOLT1"
+        }, {
+          "id" : "10.64.1.208:9191",
+          "uplinkPort" : 65536,
+          "hardwareIdentifier" : "3c:2c:99:f7:c6:40",
+          "ipAddress" : "10.64.1.208",
+          "nasId" : "ATLEDGEVOLT1"
+        }, {
+          "id" : "ALPHe3d1ce3f",
+          "cTag" : 20,
+          "sTag" : 10,
+          "nasPortId" : "PON 1/1/3/1:1.1.1",
+          "circuitId" : "PON 1/1/3/1:1.1.1-CID",
+          "remoteId" : "ATLEDGEVOLT1-RID"
+        }, {
+          "id" : "ALPHe3d1cf57",
+          "cTag" : 20,
+          "sTag" : 11,
+          "nasPortId" : "PON 1/1/3/1:2.1.1",
+          "circuitId" : "PON 1/1/3/1:2.1.1-CID",
+          "remoteId" : "ATLEDGEVOLT1-RID"
+        }, {
+          "id" : "ALCLfa5b915b",
+          "cTag" : 22,
+          "sTag" : 13,
+          "nasPortId" : "PON 1/1/3/1:3.1.1",
+          "circuitId" : "PON 1/1/3/1:3.1.1-CID",
+          "remoteId" : "ATLEDGEVOLT1-RID"
+        }, {
+          "id" : "ALCLfa5b91c3",
+          "cTag" : 20,
+          "sTag" : 12,
+          "nasPortId" : "PON 1/1/3/1:4.1.1",
+          "circuitId" : "PON 1/1/3/1:4.1.1-CID",
+          "remoteId" : "ATLEDGEVOLT1-RID"
+        }]
+      }
+    }
+  }
+}

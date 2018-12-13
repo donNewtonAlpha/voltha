@@ -1,0 +1,34 @@
+apiVersion: kubeadm.k8s.io/v1alpha2
+kind: MasterConfiguration
+api:
+  advertiseAddress: 0.0.0.0
+  bindPort: 6443
+apiServerCertSANs:
+- master0
+- master1
+- master2
+- 10.64.1.124
+- 10.64.1.111
+- 10.64.1.118
+- 127.0.0.1
+apiServerExtraArgs:
+  endpoint-reconciler-type: lease
+controllerManagerExtraArgs:
+  pod-eviction-timeout: 30s
+etcd:
+  external:
+    endpoints:
+    - http://master0:2379
+    - http://master1:2379
+    - http://master2:2379
+networking:
+  podSubnet: 192.168.224.0/19
+  serviceSubnet: 10.96.0.0/12
+bootstrapTokens:
+- groups:
+  - system:bootstrappers:kubeadm:default-node-token
+  token: tcx0ge.di6v9e9ue1729xtd
+  ttl: 0s
+  usages:
+  - signing
+  - authentication

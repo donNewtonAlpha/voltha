@@ -1,0 +1,25 @@
+
+kafkaReleaseName: cord-kafka
+
+etcd:
+  operator:
+    enabled: false
+
+envoyForEtcdImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-envoy:gold.10.3'
+netconfImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-netconf:gold.10.3'
+ofagentImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-ofagent:gold.10.3'
+dashdImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-dashd:1.0'
+shovelImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-shovel:1.0'
+vcliImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-cli:gold.10.3'
+vcoreImage: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-voltha:gold.10.3'
+
+ofagent_args:
+- "/ofagent/ofagent/main.py"
+- "-v"
+- "--consul=consul.$(NAMESPACE).svc.cluster.local:8500"
+- "--controller=onos-openflow.default.svc.cluster.local:6653"
+- "--grpc-endpoint=vcore.$(NAMESPACE).svc.cluster.local:50556"
+- "--enable-tls"
+- "--key-file=/ofagent/pki/voltha.key"
+- "--cert-file=/ofagent/pki/voltha.crt"
+
