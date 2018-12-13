@@ -239,8 +239,8 @@ spec:
       serviceAccountName: default
       containers:
         - name: onos
-          image:  "docker-repo.dev.atl.foundry.att.com:5000/voltha-onos:matt-test"
-          imagePullPolicy: Always
+          image:  "voltha-onos:latest"
+          imagePullPolicy: IfNotPresent
           command: ["./bin/onos-service", "server", "debug"]
           env:
             - name: ONOS_APPS
