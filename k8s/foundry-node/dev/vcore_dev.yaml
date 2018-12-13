@@ -58,8 +58,8 @@ spec:
       terminationGracePeriodSeconds: 0
       containers:
         - name: voltha
-          image: docker-repo.dev.atl.foundry.att.com:5000/voltha-voltha:matt-test
-          imagePullPolicy: Always
+          image: voltha-voltha:latest
+          imagePullPolicy: IfNotPresent
           env:
             - name: NAMESPACE
               valueFrom:

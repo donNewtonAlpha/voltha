@@ -46,8 +46,8 @@ spec:
     spec:
       containers:
         - name: vcli
-          image: docker-repo.dev.atl.foundry.att.com:5000/voltha-cli:matt-test
-          imagePullPolicy: Always
+          image: voltha-cli:latest
+          imagePullPolicy: IfNotPresent
           env:
             - name: POD_IP
               valueFrom:

@@ -43,8 +43,8 @@ spec:
       terminationGracePeriodSeconds: 10
       containers:
         - name: netconf
-          image: docker-repo.dev.atl.foundry.att.com:5000/voltha-netconf:matt-test
-          imagePullPolicy: Always
+          image: voltha-netconf:latest
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 830
           env:
