@@ -40,14 +40,12 @@ services:
    - "8181:8181" # UI
   environment:
    ONOS_APPS: 'drivers,openflow-base'
-  volumes:
-   - "../onos-config/network-cfg.json:/root/onos/config/network-cfg.json"
   networks:
     authnet:
      ipv4_address: 172.25.0.200
 
 # onos_config_push:
-#  image: "${REGISTRY}${REPOSITORY}voltha-config-push:latest"
+#  image: "${REGISTRY}${REPOSITORY}voltha-config-push:${TAG:-latest}"
 #  environment:
 #   ONOS_CONNECTION: 'onos:8181'
 #  volumes:
