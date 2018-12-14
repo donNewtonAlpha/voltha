@@ -13,6 +13,8 @@ https://github.com/etowah/seba-control-repo/blob/master/simple-kubespray-setup.t
 
 # Install dependancies
 cd ~/source/helm-charts/
+git pull
+
 helm repo add incubator https://kubernetes-charts-incubator.storage.googleapis.com/
 helm install -n cord-kafka incubator/kafka -f examples/kafka-single.yaml
 helm install -n etcd-operator stable/etcd-operator
