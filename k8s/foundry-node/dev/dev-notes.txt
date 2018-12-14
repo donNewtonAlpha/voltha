@@ -1,3 +1,14 @@
+#
+# Setup a voltha dev environment using k8s and helm
+#
+
+
+# See below first for k8s environment setup
+# Single server
+https://github.com/etowah/seba-control-repo/blob/master/simple-kubeadm-setup.txt
+# 3 server cluster
+https://github.com/etowah/seba-control-repo/blob/master/simple-kubespray-setup.txt
+
 
 
 # Install dependancies
