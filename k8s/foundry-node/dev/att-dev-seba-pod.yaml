@@ -1,0 +1,32 @@
+# ATT SEBA Voltha Helm Values
+
+freeradius:
+  enabled: false
+
+etcd-cluster:
+  clusterSize: 1
+
+images:
+  vcore:
+    tag: 'voltha-1.6'
+
+  vcli:
+    tag: 'voltha-1.6'
+    pullPolicy: 'Always'
+
+  ofagent:
+    tag: 'voltha-1.6'
+    pullPolicy: 'Always'
+
+  netconf:
+    tag: 'voltha-1.6'
+    pullPolicy: 'Always'
+
+  envoy_for_etcd:
+    tag: 'voltha-1.6'
+    pullPolicy: 'Always'
+
+  alarm_generator:
+    tag: 'voltha-1.6'
+    pullPolicy: 'Always'
+

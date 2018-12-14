@@ -1,0 +1,51 @@
+#
+# Setup a seba environment using k8s and helm
+#
+
+
+# See below first for k8s environment setup
+# Single server
+https://github.com/etowah/seba-control-repo/blob/master/simple-kubeadm-setup.txt
+# 3 server cluster
+https://github.com/etowah/seba-control-repo/blob/master/simple-kubespray-setup.txt
+
+
+
+# Install dependancies
+cd ~/source/helm-charts/
+helm repo add incubator https://kubernetes-charts-incubator.storage.googleapis.com/
+helm install -n cord-kafka incubator/kafka -f examples/kafka-single.yaml
+helm install -n etcd-operator stable/etcd-operator
+
+# wait for etcdcluster CRD
+kubectl get crd |grep etcdclusters
+
+
+# deploy packaged voltha/onos/xos/seba
+helm dep update voltha
+helm install -n voltha voltha -f ~/source/voltha/k8s/foundry-node/dev/att-dev-seba-pod.yaml
+
+helm install -n onos onos 
+
+helm dep update xos-core
+helm install -n xos-core xos-core
+
+helm dep update xos-profiles/seba-services
+helm install -n seba-services xos-profiles/seba-services
+
+helm dep update workflows/att-workflow
+helm install -n att-workflow workflows/att-workflow
+
+
+# provision olt/onu
+cd ~/source/voltha/k8s/foundry-node/dev/
+
+curl -v --user onos:rocks -H "Content-Type: application/json" -X POST --data-binary @radius-netcfg.json http://seba-node1:30120/onos/v1/network/configuration/ 
+
+curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --data-binary @tosca/pod-olt.yaml http://seba-node1:30007/run
+curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --data-binary @tosca/whitelist.yaml http://seba-node1:30007/run
+curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --data-binary @tosca/subscribers.yaml http://seba-node1:30007/run
+
+
+# cleanup
+helm delete --purge att-workflow seba-services onos voltha xos-core cord-kafka etcd-operator 
