@@ -28,6 +28,8 @@ then
 fi
 
 
+kubectl delete -f $srcpath/onos_dev.yaml
+kubectl delete -f $srcpath/ofagent_dev.yaml
 kubectl delete -f $srcpath/envoy_dev.yaml
 kubectl delete -f $srcpath/vcore_dev.yaml
 
@@ -53,4 +55,6 @@ sleep 5
 
 kubectl apply -f $srcpath/vcore_dev.yaml
 kubectl apply -f $srcpath/envoy_dev.yaml
+kubectl apply -f $srcpath/ofagent_dev.yaml
+kubectl apply -f $srcpath/onos_dev.yaml
 
