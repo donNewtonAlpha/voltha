@@ -37,7 +37,7 @@ helm install -n onos cord/onos
 helm install -n xos-core cord/xos-core
 
 # Custom voltha config file to set image versions
-helm install -n voltha cord/voltha -f ~/source/voltha/k8s/foundry-node/dev/voltha-values.yaml
+helm install -n voltha cord/voltha -f voltha-values.yaml
 
 helm install -n seba-service cord/seba-services
 helm install -n att-workflow cord/att-workflow --set att-workflow-driver.kafkaService=cord-kafka
@@ -46,8 +46,6 @@ helm install -n att-workflow cord/att-workflow --set att-workflow-driver.kafkaSe
 kubectl get pods --all-namespaces | grep tosca-loader
 
 
-# provision olt/onu
-cd ~/source/voltha/k8s/foundry-node/dev/
 
 # Add an /etc/hosts file entry for your local IP (not 127.0.0.1) pointing to seba-node1
 curl -v --user onos:rocks -H "Content-Type: application/json" -X POST --data-binary @radius-netcfg.json http://seba-node1:30120/onos/v1/network/configuration/ 
