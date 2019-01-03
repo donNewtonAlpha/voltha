@@ -24,11 +24,14 @@ https://github.com/donNewtonAlpha/voltha/blob/master/k8s/foundry-node/dev/dev-no
 
 Install full SEBA pod using helm (xos/onos/voltha).  This has also been tested on a single VM and a 3 server cluster.  
 
-Online/Development installation:
+Online/Development installation (override chart/docker image versions as needed):  
 https://github.com/donNewtonAlpha/voltha/blob/master/k8s/foundry-node/dev/seba-notes.txt
 
-Offline Release installation:
-https://github.com/etowah/seba-control-repo/blob/master/helm-seba-voltha-install.txt
+Online Release Installation (using all-in-one macro charts. voltha 1.6, seba 1.0, cord 6.1):  
+https://github.com/donNewtonAlpha/voltha/blob/master/k8s/foundry-node/dev/seba-macro-chart-notes.txt
+
+Offline Release installation (voltha 1.5, seba pre-release):  
+https://github.com/etowah/seba-control-repo/blob/master/helm-seba-voltha-install.txt  
 
 
 

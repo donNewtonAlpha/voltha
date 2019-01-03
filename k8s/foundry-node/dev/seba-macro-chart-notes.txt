@@ -1,0 +1,44 @@
+#
+# Setup a seba environment using k8s and helm
+#
+
+
+# See below first for k8s environment setup
+# Single server
+https://github.com/etowah/seba-control-repo/blob/master/simple-kubeadm-setup.txt
+# 3 server cluster
+https://github.com/etowah/seba-control-repo/blob/master/simple-kubespray-setup.txt
+
+
+
+helm repo add incubator https://kubernetes-charts-incubator.storage.googleapis.com/
+helm repo add cord https://charts.opencord.org
+helm repo update
+
+helm install -n cord-platform cord/cord-platform --version=6.1.0
+
+# wait for etcdcluster CRD
+kubectl get crd | grep etcd
+
+
+helm install -n seba cord/seba --version=1.0.0
+helm install -n att-workflow cord/att-workflow
+
+# wait for 3 tosca loader pods to report status Completed
+kubectl get pods --all-namespaces | grep tosca-loader
+
+
+# provision olt/onu
+cd ~/source/voltha/k8s/foundry-node/dev/
+
+# Add an /etc/hosts file entry for your local IP (not 127.0.0.1) pointing to seba-node1
+curl -v --user onos:rocks -H "Content-Type: application/json" -X POST --data-binary @radius-netcfg.json http://seba-node1:30120/onos/v1/network/configuration/ 
+
+curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --data-binary @tosca/pod-olt.yaml http://seba-node1:30007/run
+curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --data-binary @tosca/whitelist.yaml http://seba-node1:30007/run
+curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --data-binary @tosca/subscribers.yaml http://seba-node1:30007/run
+
+
+
+# cleanup
+helm delete --purge att-workflow seba cord-platform
