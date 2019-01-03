@@ -48,6 +48,7 @@ helm install -n att-workflow cord/att-workflow --set att-workflow-driver.kafkaSe
 # provision olt/onu
 cd ~/source/voltha/k8s/foundry-node/dev/
 
+# Add an /etc/hosts file entry for your local IP (not 127.0.0.1) pointing to seba-node1
 curl -v --user onos:rocks -H "Content-Type: application/json" -X POST --data-binary @radius-netcfg.json http://seba-node1:30120/onos/v1/network/configuration/ 
 
 curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --data-binary @tosca/pod-olt.yaml http://seba-node1:30007/run
