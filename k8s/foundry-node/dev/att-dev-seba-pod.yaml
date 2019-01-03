@@ -9,6 +9,7 @@ etcd-cluster:
 images:
   vcore:
     tag: 'voltha-1.6'
+    pullPolicy: 'Always'
 
   vcli:
     tag: 'voltha-1.6'
