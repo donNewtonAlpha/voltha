@@ -30,7 +30,6 @@ helm install -n etcd-operator stable/etcd-operator --version 0.8.0
 kubectl get crd | grep etcd
 
 
-
 # Install voltha and seba
 helm repo add cord https://charts.opencord.org
 helm repo update
