@@ -12,31 +12,37 @@ https://github.com/etowah/seba-control-repo/blob/master/simple-kubespray-setup.t
 
 
 # Install dependancies
-cd ~/source/helm-charts/
-git pull
-
 helm repo add incubator https://kubernetes-charts-incubator.storage.googleapis.com/
-helm install -n cord-kafka incubator/kafka -f examples/kafka-single.yaml
-helm install -n etcd-operator stable/etcd-operator
+helm repo update
+helm install --version 0.8.8 \
+             --set configurationOverrides."offsets.topic.replication.factor"=1 \
+             --set configurationOverrides."log.retention.hours"=4 \
+             --set configurationOverrides."log.message.timestamp.type"="LogAppendTime" \
+             --set replicas=1 \
+             --set persistence.enabled=false \
+             --set zookeeper.replicaCount=1 \
+             --set zookeeper.persistence.enabled=false \
+             -n cord-kafka incubator/kafka
+
+helm install -n etcd-operator stable/etcd-operator --version 0.8.0
 
 # wait for etcdcluster CRD
-kubectl get crd |grep etcdclusters
+kubectl get crd | grep etcd
 
 
-# deploy packaged voltha/onos/xos/seba
-helm dep update voltha
-helm install -n voltha voltha -f ~/source/voltha/k8s/foundry-node/dev/att-dev-seba-pod.yaml
 
-helm install -n onos onos 
+# Install voltha and seba
+helm repo add cord https://charts.opencord.org
+helm repo update
+helm install -n onos cord/onos
+helm install -n xos-core cord/xos-core
 
-helm dep update xos-core
-helm install -n xos-core xos-core
+# Custom voltha config file to set image versions
+helm install -n voltha cord/voltha -f ~/source/voltha/k8s/foundry-node/dev/att-dev-seba-pod.yaml
 
-helm dep update xos-profiles/seba-services
-helm install -n seba-services xos-profiles/seba-services
+helm install -n seba-service cord/seba-services
+helm install -n att-workflow cord/att-workflow
 
-helm dep update workflows/att-workflow
-helm install -n att-workflow workflows/att-workflow
 
 
 # provision olt/onu
@@ -49,5 +55,6 @@ curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --
 curl -H "xos-username: admin@opencord.org" -H "xos-password: letmein" -X POST --data-binary @tosca/subscribers.yaml http://seba-node1:30007/run
 
 
+
 # cleanup
-helm delete --purge att-workflow seba-services onos voltha xos-core cord-kafka etcd-operator 
+helm delete --purge att-workflow seba-service onos voltha xos-core cord-kafka etcd-operator
