@@ -40,7 +40,7 @@ https://github.com/etowah/seba-control-repo/blob/master/helm-seba-voltha-install
 
 
 ### Access to the Foundry docker repo
-This requires your source IP to be added to a trused ACL.  Provide that to the administrator then follow the notes below to add the needed CA cert to your system and test:  
+This requires your source IP to be added to a trusted ACL.  Provide that to the repo administrator then follow the notes below to add the needed CA cert to your system and test:  
 https://github.com/donNewtonAlpha/voltha/blob/master/k8s/foundry-node/convert-repo.md
 
 
