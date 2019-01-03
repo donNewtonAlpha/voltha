@@ -18,11 +18,16 @@ https://github.com/etowah/seba-control-repo/blob/master/README.md
 
 ## Installing SEBA or VOLTHA
 
+### VOLTHA development using static k8s yaml
 Installing voltha using static yaml files.   This is what we typically do for day-to-day development iteration.   
 https://github.com/donNewtonAlpha/voltha/blob/master/k8s/foundry-node/dev/dev-notes.txt
 
 
-Install full SEBA pod using helm (xos/onos/voltha).  This has also been tested on a single VM and a 3 server cluster.  
+### Install full SEBA pod using helm (xos/onos/voltha).  
+This has also been tested on a single VM and a 3 server cluster.  Much of this has been pulled from the official CORD
+documentation:  
+https://guide.opencord.org/profiles/seba/install.html
+
 
 Online/Development installation (override chart/docker image versions as needed):  
 https://github.com/donNewtonAlpha/voltha/blob/master/k8s/foundry-node/dev/seba-notes.txt
@@ -34,8 +39,12 @@ Offline Release installation (voltha 1.5, seba pre-release):
 https://github.com/etowah/seba-control-repo/blob/master/helm-seba-voltha-install.txt  
 
 
+### Access to the Foundry docker repo
+This requires your source IP to be added to a trused ACL.  Provide that to the administrator then follow the notes below to add the needed CA cert to your system and test:  
+https://github.com/donNewtonAlpha/voltha/blob/master/k8s/foundry-node/convert-repo.md
 
-## Debugging VOLTHA
+
+### Debugging VOLTHA
 
 Run pycharm with remote debugging capabilities.   Build development image that allows stepping through code and breakpoints  
 https://github.com/donNewtonAlpha/voltha/blob/master/k8s/foundry-node/pycharm-voltha-debug.md
