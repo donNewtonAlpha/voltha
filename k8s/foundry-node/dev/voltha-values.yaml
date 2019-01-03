@@ -8,26 +8,32 @@ etcd-cluster:
 
 images:
   vcore:
-    tag: 'voltha-1.6'
+    repository: 'voltha/voltha-voltha'
+    tag: '1.6.0'
     pullPolicy: 'Always'
 
   vcli:
-    tag: 'voltha-1.6'
+    repository: 'voltha/voltha-cli'
+    tag: '1.6.0'
     pullPolicy: 'Always'
 
   ofagent:
-    tag: 'voltha-1.6'
+    repository: 'voltha/voltha-ofagent'
+    tag: '1.6.0'
     pullPolicy: 'Always'
 
   netconf:
-    tag: 'voltha-1.6'
+    repository: 'voltha/voltha-netconf'
+    tag: '1.6.0'
     pullPolicy: 'Always'
 
   envoy_for_etcd:
-    tag: 'voltha-1.6'
+    repository: 'voltha/voltha-envoy'
+    tag: '1.6.0'
     pullPolicy: 'Always'
 
   alarm_generator:
-    tag: 'voltha-1.6'
+    repository: 'voltha/voltha-alarm-generator'
+    tag: '1.6.0'
     pullPolicy: 'Always'
 
