@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import structlog
-from twisted.internet.defer import  inlineCallbacks, returnValue, succeed
+from twisted.internet.defer import  inlineCallbacks, returnValue
 
 from voltha.adapters.adtran_olt.xpon.tcont import TCont
 from voltha.adapters.adtran_olt.xpon.traffic_descriptor import TrafficDescriptor
@@ -25,15 +25,17 @@ class OnuTCont(TCont):
     """
     Adtran ONU specific implementation
     """
-    free_tcont_alloc_id = 0xFFFF
-    free_gpon_tcont_alloc_id = 0xFF     # SFU may use this to indicate a free TCONT
+    FREE_TCONT_ALLOC_ID = 0xFFFF
+    FREE_GPON_TCONT_ALLOC_ID = 0xFF     # SFU may use this to indicate a free TCONT
 
-    def __init__(self, handler, alloc_id, traffic_descriptor, name=None):
-        super(OnuTCont, self).__init__(alloc_id, traffic_descriptor, name=name)
-        self._handler = handler
-        self._entity_id = None
+    def __init__(self, handler, alloc_id, sched_policy, tech_profile_id, uni_id, traffic_descriptor, is_mock=False):
+        super(OnuTCont, self).__init__(alloc_id, tech_profile_id, traffic_descriptor, uni_id, is_mock=is_mock)
         self.log = structlog.get_logger(device_id=handler.device_id, alloc_id=alloc_id)
-        self._free_alloc_id = OnuTCont.free_tcont_alloc_id
+
+        self._handler = handler
+        self.sched_policy = sched_policy
+        self._entity_id = None
+        self._free_alloc_id = OnuTCont.FREE_TCONT_ALLOC_ID
 
     @property
     def entity_id(self):
@@ -43,11 +45,18 @@ class OnuTCont(TCont):
     def create(handler, tcont, td):
         assert isinstance(tcont, dict), 'TCONT should be a dictionary'
         assert isinstance(td, TrafficDescriptor), 'Invalid Traffic Descriptor data type'
-        return OnuTCont(handler, tcont['alloc-id'], td, name=tcont['name'])
+        return OnuTCont(handler,
+                        tcont['alloc-id'],
+                        tcont['q-sched-policy'],
+                        tcont['tech-profile-id'],
+                        tcont['uni-id'],
+                        td)
 
     @inlineCallbacks
-    def add_to_hardware(self, omci, tcont_entity_id, prev_alloc_id=free_tcont_alloc_id):
+    def add_to_hardware(self, omci, tcont_entity_id, prev_alloc_id=FREE_TCONT_ALLOC_ID):
         self.log.debug('add-to-hardware', tcont_entity_id=tcont_entity_id)
+        if self._is_mock:
+            returnValue('mock')
 
         if self._entity_id == tcont_entity_id:
             returnValue('Already set')
@@ -56,6 +65,9 @@ class OnuTCont(TCont):
             raise KeyError('TCONT already assigned: {}'.format(self.entity_id))
 
         try:
+            # TODO: Look up ONU2-G QoS flexibility attribute and only set this
+            #       if q-sched-policy  can be supported
+
             self._free_alloc_id = prev_alloc_id
             frame = TcontFrame(tcont_entity_id, self.alloc_id).set()
             results = yield omci.send(frame)
@@ -80,6 +92,8 @@ class OnuTCont(TCont):
     @inlineCallbacks
     def remove_from_hardware(self, omci):
         self.log.debug('remove-from-hardware', tcont_entity_id=self.entity_id)
+        if self._is_mock:
+            returnValue('mock')
         try:
             frame = TcontFrame(self.entity_id, self._free_alloc_id).set()
             results = yield omci.send(frame)

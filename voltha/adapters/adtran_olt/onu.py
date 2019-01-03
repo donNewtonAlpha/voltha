@@ -18,6 +18,8 @@ import json
 import structlog
 from twisted.internet import reactor, defer
 from twisted.internet.defer import inlineCallbacks, returnValue, succeed
+from common.tech_profile.tech_profile import DEFAULT_TECH_PROFILE_TABLE_ID
+from voltha.protos.device_pb2 import Device
 
 from adtran_olt_handler import AdtranOltHandler
 from net.adtran_rest import RestInvalidResponseCode
@@ -49,25 +51,24 @@ class Onu(object):
         self._serial_number_string = onu_info['serial-number']
         self._device_id = onu_info['device-id']
         self._password = onu_info['password']
-
         self._created = False
-        self._proxy_address = None
+        self._proxy_address = Device.ProxyAddress(device_id=self.olt.device_id,
+                                                  channel_id=self.olt.pon_id_to_port_number(self._pon_id),
+                                                  onu_id=self._onu_id,
+                                                  onu_session_id=self._onu_id)
         self._sync_tick = _HW_SYNC_SECS
         self._expedite_sync = False
         self._expedite_count = 0
         self._resync_flows = False
         self._sync_deferred = None     # For sync of ONT config to hardware
 
-        # Resources
-        self._gem_ports = {}  # gem-id -> GemPort
-        self._tconts = {}  # alloc-id -> TCont
+        self._gem_ports = {}                        # gem-id -> GemPort
+        self._tconts = {}                           # alloc-id -> TCont
         self._uni_ports = onu_info['uni-ports']
 
         # Provisionable items
         self._enabled = onu_info['enabled']
         self._upstream_fec_enable = onu_info.get('upstream-fec')
-        self._upstream_channel_speed = onu_info['upstream-channel-speed']
-        # TODO: how do we want to enforce upstream channel speed (if at all)?
 
         # KPI related items
         self._rssi = -9999
@@ -134,16 +135,6 @@ class Onu(object):
         self.pon.upstream_fec_enable = self.pon.any_upstream_fec_enabled
 
     @property
-    def upstream_channel_speed(self):
-        return self._upstream_channel_speed
-
-    @upstream_channel_speed.setter
-    def upstream_channel_speed(self, value):
-        assert isinstance(value, (int, float)), 'upstream speed is a numeric value'
-        if self._upstream_channel_speed != value:
-            self._upstream_channel_speed = value
-
-    @property
     def password(self):
         """
         Get password.  Base 64 format
@@ -206,14 +197,6 @@ class Onu(object):
 
     @property
     def proxy_address(self):
-        if self._proxy_address is None:
-            from voltha.protos.device_pb2 import Device
-
-            device_id = self.olt.device_id
-            self._proxy_address = Device.ProxyAddress(device_id=device_id,
-                                                      channel_id=self.pon.port_no,
-                                                      onu_id=self.onu_id,
-                                                      onu_session_id=self.onu_id)
         return self._proxy_address
 
     @property
@@ -276,15 +259,13 @@ class Onu(object):
                 pass
 
     @inlineCallbacks
-    def create(self, tconts, gem_ports, reflow=False):
+    def create(self, reflow=False):
         """
         Create (or reflow) this ONU to hardware
-        :param tconts: (dict) Current TCONT information
-        :param gem_ports: (dict) Current GEM Port configuration information
         :param reflow: (boolean) Flag, if True, indicating if this is a reflow ONU
                                  information after an unmanaged OLT hardware reboot
         """
-        self.log.debug('create', tconts=tconts, gem_ports=gem_ports, reflow=reflow)
+        self.log.debug('create', reflow=reflow)
         self._cancel_deferred()
 
         data = json.dumps({'onu-id': self._onu_id,
@@ -313,30 +294,13 @@ class Onu(object):
                     if len(results) == 1 and results[0].get('serial-number', '') != self._serial_number_base64:
                         self._created = True
 
-                except Exception as e:
+                except Exception as _e:
                     self.log.warn('onu-exists-check', pon_id=self.pon_id, onu_id=self.onu_id,
                                   serial_number=self.serial_number)
 
-        # Now set up all TConts & GEM-ports
-        for tcont in tconts:
-            try:
-                _results = yield self.add_tcont(tcont['object'], reflow=reflow)
-
-            except Exception as e:
-                self.log.exception('add-tcont', tcont=tcont, e=e)
-                first_sync = 2    # Expedite first hw-sync
-
-        for gem_port in gem_ports:
-            try:
-                _results = yield self.add_gem_port(gem_port['object'], reflow=reflow)
-
-            except Exception as e:
-                self.log.exception('add-gem-port', gem_port=gem_port, reflow=reflow, e=e)
-                first_sync = 2    # Expedite first hw-sync
-
         self._sync_deferred = reactor.callLater(first_sync, self._sync_hardware)
-        # Recalculate PON upstream FEC
 
+        # Recalculate PON upstream FEC
         self.pon.upstream_fec_enable = self.pon.any_upstream_fec_enabled
         returnValue('created')
 
@@ -373,13 +337,13 @@ class Onu(object):
 
         self._gem_ports.clear()
         self._tconts.clear()
+        olt, self._olt = self._olt, None
 
         uri = AdtranOltHandler.GPON_ONU_CONFIG_URI.format(self._pon_id, self._onu_id)
         name = 'onu-delete-{}-{}-{}: {}'.format(self._pon_id, self._onu_id,
                                                 self._serial_number_base64, self._enabled)
         try:
-            yield self.olt.rest_client.request('DELETE', uri, name=name)
-            self._olt = None
+            yield olt.rest_client.request('DELETE', uri, name=name)
 
         except RestInvalidResponseCode as e:
             if e.code != 404:
@@ -387,6 +351,10 @@ class Onu(object):
 
         except Exception as e:
             self.log.exception('onu-delete', e=e)
+
+        # Release resource manager resources for this ONU
+        pon_intf_id_onu_id = (self.pon_id, self.onu_id)
+        olt.resource_mgr.free_pon_resources_for_onu(pon_intf_id_onu_id)
 
         returnValue('deleted')
 
@@ -404,10 +372,7 @@ class Onu(object):
         self._cancel_deferred()
         self._sync_deferred = reactor.callLater(0, self._sync_hardware)
 
-        tconts, self._tconts = self._tconts, {}
-        gem_ports, self._gem_ports = self._gem_ports, {}
-
-        return self.create(tconts, gem_ports)
+        return self.create()
 
     def _sync_hardware(self):
         from codec.olt_config import OltConfig
@@ -646,24 +611,6 @@ class Onu(object):
 
         except Exception as e:
             self.log.exception('tcont', tcont=tcont, reflow=reflow, e=e)
-            # May occur with xPON provisioning, use hw-resync to recover
-            results = 'resync needed'
-
-        returnValue(results)
-
-    @inlineCallbacks
-    def update_tcont_td(self, alloc_id, new_td):
-        tcont = self._tconts.get(alloc_id)
-
-        if tcont is None:
-            returnValue('not-found')
-
-        tcont.traffic_descriptor = new_td
-        try:
-            results = yield tcont.add_to_hardware(self.olt.rest_client)
-        except Exception as e:
-            self.log.exception('tcont', tcont=tcont, e=e)
-            # May occur with xPON provisioning, use hw-resync to recover
             results = 'resync needed'
 
         returnValue(results)
@@ -693,10 +640,12 @@ class Onu(object):
     def gem_port(self, gem_id):
         return self._gem_ports.get(gem_id)
 
-    def gem_ids(self):
+    def gem_ids(self, tech_profile_id):
         """Get all GEM Port IDs used by this ONU"""
+        assert tech_profile_id >= DEFAULT_TECH_PROFILE_TABLE_ID
         return sorted([gem_id for gem_id, gem in self._gem_ports.items()
-                       if not gem.multicast])
+                       if not gem.multicast and
+                       tech_profile_id == gem.tech_profile_id])
 
     @inlineCallbacks
     def add_gem_port(self, gem_port, reflow=False):
@@ -713,39 +662,20 @@ class Onu(object):
         if not reflow and gem_port.gem_id in self._gem_ports:
             returnValue('nop')
 
-        gem_port.pon_id = self.pon_id
-        gem_port.onu_id = self.onu_id if self.onu_id is not None else -1
-        gem_port.intf_id = self.intf_id
-
-        # TODO: Currently only support a single UNI. Need to support multiple and track their GEM Ports
-        #       Probably best done by having a UNI-Port class (keep it simple)
         self.log.info('add', gem_port=gem_port, reflow=reflow)
         self._gem_ports[gem_port.gem_id] = gem_port
 
         try:
             results = yield gem_port.add_to_hardware(self.olt.rest_client)
-            # May need to update flow tables/evc-maps
-            if gem_port.alloc_id in self._tconts:
-                from flow.flow_entry import FlowEntry
-                # GEM-IDs are a sorted list (ascending). First gemport handles downstream traffic
-                # from flow.flow_entry import FlowEntry
-                evc_maps = FlowEntry.find_evc_map_flows(self)
-
-                for evc_map in evc_maps:
-                    evc_map.add_gem_port(gem_port, reflow=reflow)
 
         except Exception as e:
             self.log.exception('gem-port', gem_port=gem_port, reflow=reflow, e=e)
-            # This can happen with xPON if the ONU has been provisioned, but the PON Discovery
-            # has not occurred for the ONU. Rely on hw sync to recover
             results = 'resync needed'
 
         returnValue(results)
 
     @inlineCallbacks
     def remove_gem_id(self, gem_id):
-        from flow.flow_entry import FlowEntry
-
         gem_port = self._gem_ports.get(gem_id)
 
         if gem_port is None:
@@ -753,14 +683,6 @@ class Onu(object):
 
         del self._gem_ports[gem_id]
         try:
-
-            if gem_port.alloc_id in self._tconts:
-                # May need to update flow tables/evc-maps
-                # GEM-IDs are a sorted list (ascending). First gemport handles downstream traffic
-                evc_maps = FlowEntry.find_evc_map_flows(self)
-                for evc_map in evc_maps:
-                    evc_map.remove_gem_port(gem_port)
-
             yield gem_port.remove_from_hardware(self.olt.rest_client)
 
         except RestInvalidResponseCode as e:
@@ -770,13 +692,6 @@ class Onu(object):
         except Exception as ex:
             self.log.exception('gem-port-delete', e=ex)
             raise
-
-        for evc_map in FlowEntry.find_evc_map_flows(self):
-            try:
-                evc_map.remove_gem_port(gem_port)
-
-            except Exception as ex:
-                self.log.exception('evc-map-gem-remove', e=ex)
 
         returnValue('done')
 

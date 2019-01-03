@@ -1,4 +1,4 @@
-
+#
 # Copyright 2017-present Adtran, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,62 +24,146 @@ class OnuGemPort(GemPort):
     """
     Adtran ONU specific implementation
     """
-    def __init__(self, gem_id, alloc_id, entity_id,
-                 encryption=False,
-                 omci_transport=False,
-                 multicast=False,
-                 tcont_ref=None,
-                 traffic_class=None,
-                 name=None,
-                 handler=None):
-        super(OnuGemPort, self).__init__(gem_id, alloc_id,
-                                         encryption=encryption,
-                                         omci_transport=omci_transport,
-                                         multicast=multicast,
-                                         tcont_ref=tcont_ref,
-                                         traffic_class=traffic_class,
-                                         name=name,
-                                         handler=handler)
-        self._entity_id = entity_id
-        self._tcont_entity_id = None
-        self._interworking = False
+    UPSTREAM = 1
+    DOWNSTREAM = 2
+    BIDIRECTIONAL = 3
+
+    def __init__(self, handler, gem_data, alloc_id, tech_profile_id,
+                 uni_id, entity_id,
+                 multicast=False, traffic_class=None, is_mock=False):
+        gem_id = gem_data['gemport-id']
         self.log = structlog.get_logger(device_id=handler.device_id, gem_id=gem_id)
+        encryption = gem_data['encryption']
+
+        super(OnuGemPort, self).__init__(gem_id, alloc_id, uni_id,
+                                         tech_profile_id,
+                                         encryption=encryption,
+                                         multicast=multicast,
+                                         traffic_class=traffic_class,
+                                         handler=handler,
+                                         is_mock=is_mock)
+        try:
+            self._gem_data = gem_data
+            self._entity_id = entity_id
+            self._tcont_entity_id = None
+            self._interworking = False
+            self.uni_id = gem_data['uni-id']
+            self.direction = gem_data.get('direction', OnuGemPort.BIDIRECTIONAL)
+
+            # IEEE 802.1p Mapper ME (#130) related parameters
+            self._pbit_map = None
+            self.pbit_map = gem_data.get('pbit-map', '0b00000011')
+
+            # Upstream priority queue ME (#277) related parameters
+            self.priority_q = gem_data.get('priority-q', 3)
+
+            self._max_q_size = None
+            self.max_q_size = gem_data.get('max-q-size', 'auto')
+
+            self.weight = gem_data.get('weight', 8)
+
+            self._discard_config = None
+            self.discard_config = gem_data.get('discard-config',  None)
+
+            self._discard_policy = None
+            self.discard_policy = gem_data.get('discard-policy', 'TailDrop')
+
+            # Traffic scheduler ME (#278) related parameters
+            self._scheduling_policy = None
+            self.scheduling_policy = gem_data.get('scheduling-policy', 'WRR')
+
+        except Exception as _e:
+            raise
 
     @property
     def entity_id(self):
         return self._entity_id
 
     @property
-    def encryption(self):
-        return self._encryption
+    def discard_config(self):
+        return self._discard_config
+
+    @discard_config.setter
+    def discard_config(self, discard_config):
+        assert isinstance(discard_config, dict), "discard-config not dict"
+        assert 'max-probability' in discard_config, "max-probability missing"
+        assert 'max-threshold' in discard_config, "max-hreshold missing"
+        assert 'min-threshold' in discard_config, "min-threshold missing"
+        self._discard_config = discard_config
+
+    @property
+    def discard_policy(self):
+        self.log.debug('function-entry')
+        return self._discard_policy
+
+    @discard_policy.setter
+    def discard_policy(self, discard_policy):
+        dp = ("TailDrop", "WTailDrop", "RED", "WRED")
+        assert (isinstance(discard_policy, str))
+        assert (discard_policy in dp)
+        self._discard_policy = discard_policy
+
+    @property
+    def max_q_size(self):
+        return self._max_q_size
+
+    @max_q_size.setter
+    def max_q_size(self, max_q_size):
+        if isinstance(max_q_size, str):
+            assert (max_q_size == "auto")
+        else:
+            assert (isinstance(max_q_size, int))
+
+        self._max_q_size = max_q_size
+
+    @property
+    def pbit_map(self):
+        return self._pbit_map
+
+    @pbit_map.setter
+    def pbit_map(self, pbit_map):
+        assert (isinstance(pbit_map, str))
+        assert (len(pbit_map[2:]) == 8)  # Example format of pbit_map: "0b00000101"
+        try:
+            _ = int(pbit_map[2], 2)
+        except ValueError:
+            raise Exception("pbit_map-not-binary-string-{}".format(pbit_map))
+
+        # remove '0b'
+        self._pbit_map = pbit_map[2:]
+
+    @property
+    def scheduling_policy(self):
+        return self._scheduling_policy
+
+    @scheduling_policy.setter
+    def scheduling_policy(self, scheduling_policy):
+        sp = ("WRR", "StrictPriority")
+        assert (isinstance(scheduling_policy, str))
+        assert (scheduling_policy in sp)
+        self._scheduling_policy = scheduling_policy
 
     @property
     def in_hardware(self):
         return self._tcont_entity_id is not None and self._interworking
 
-    @encryption.setter
-    def encryption(self, value):
-        assert isinstance(value, bool), 'encryption is a boolean'
-
-        if self._encryption != value:
-            self._encryption = value
-
     @staticmethod
-    def create(handler, gem_port, entity_id):
-        return OnuGemPort(gem_port['gemport-id'],
-                          None,
-                          entity_id,
-                          encryption=gem_port['encryption'],  # aes_indicator,
-                          tcont_ref=gem_port['tcont-ref'],
-                          name=gem_port['name'],
-                          traffic_class=gem_port['traffic-class'],
-                          handler=handler)
+    def create(handler, gem_data, alloc_id, tech_profile_id, uni_id, entity_id):
+        return OnuGemPort(handler, gem_data, alloc_id,
+                          tech_profile_id, uni_id, entity_id)
+
+    @property
+    def tcont(self):
+        """ Get the associated TCONT object """
+        return self._handler.pon_port.tconts.get(self.alloc_id)
 
     @inlineCallbacks
     def add_to_hardware(self, omci,
                         tcont_entity_id,
                         ieee_mapper_service_profile_entity_id,
                         gal_enet_profile_entity_id):
+        if self._is_mock:
+            returnValue('mock')
 
         self.log.debug('add-to-hardware', gem_id=self.gem_id,
                        gem_entity_id=self.entity_id,
@@ -154,6 +238,9 @@ class OnuGemPort(GemPort):
 
     @inlineCallbacks
     def remove_from_hardware(self, omci):
+        if self._is_mock:
+            returnValue('mock')
+
         self.log.debug('remove-from-hardware',  gem_id=self.gem_id)
 
         results = None
