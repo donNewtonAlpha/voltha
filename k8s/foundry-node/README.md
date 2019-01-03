@@ -29,14 +29,12 @@ documentation:
 https://guide.opencord.org/profiles/seba/install.html
 
 
-Online/Development installation (override chart/docker image versions as needed):  
+Development installation (override chart/docker image versions, values yaml as needed):  
 https://github.com/donNewtonAlpha/voltha/blob/master/k8s/foundry-node/dev/seba-notes.txt
 
-Online Release Installation (using all-in-one macro charts. voltha 1.6, seba 1.0, cord 6.1):  
+Release Installation (using all-in-one macro charts. voltha 1.6, seba 1.0, cord 6.1):  
 https://github.com/donNewtonAlpha/voltha/blob/master/k8s/foundry-node/dev/seba-macro-chart-notes.txt
 
-Offline Release installation (voltha 1.5, seba pre-release):  
-https://github.com/etowah/seba-control-repo/blob/master/helm-seba-voltha-install.txt  
 
 
 ### Access to the Foundry docker repo
