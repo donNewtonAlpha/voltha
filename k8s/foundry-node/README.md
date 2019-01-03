@@ -19,19 +19,20 @@ https://github.com/etowah/seba-control-repo/blob/master/README.md
 ## Installing SEBA or VOLTHA
 
 Installing voltha using static yaml files.   This is what we typically do for day-to-day development iteration.   
-https://github.com/donNewtonAlpha/voltha/blob/master/k8s/foundry-node/basic-voltha-setup.md
+https://github.com/donNewtonAlpha/voltha/blob/master/k8s/foundry-node/dev/dev-notes.txt
 
 
 Install full SEBA pod using helm (xos/onos/voltha).  This has also been tested on a single VM and a 3 server cluster.  
 
 Online/Development installation:
-https://github.com/donNewtonAlpha/voltha/blob/master/k8s/foundry-node/foundry-k8s-cluster/seba-pod-helm-setup.md  
+https://github.com/donNewtonAlpha/voltha/blob/master/k8s/foundry-node/dev/seba-notes.txt
 
 Offline Release installation:
 https://github.com/etowah/seba-control-repo/blob/master/helm-seba-voltha-install.txt
 
 
-## Development and Debugging
+
+## Debugging VOLTHA
 
 Run pycharm with remote debugging capabilities.   Build development image that allows stepping through code and breakpoints  
 https://github.com/donNewtonAlpha/voltha/blob/master/k8s/foundry-node/pycharm-voltha-debug.md
