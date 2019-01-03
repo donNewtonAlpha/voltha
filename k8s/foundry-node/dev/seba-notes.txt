@@ -43,6 +43,8 @@ helm install -n voltha cord/voltha -f ~/source/voltha/k8s/foundry-node/dev/volth
 helm install -n seba-service cord/seba-services
 helm install -n att-workflow cord/att-workflow --set att-workflow-driver.kafkaService=cord-kafka
 
+# wait for 2 tosca loader pods to report status Completed
+kubectl get pods --all-namespaces | grep tosca-loader
 
 
 # provision olt/onu
