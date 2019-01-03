@@ -1,6 +1,6 @@
 # Convert "insecure" access to foundry docker repo to TLS secured
 
-This assumes youve been using the old way described in previous versions of foundry-kube-voltha-setup.txt
+This assumes you have been running an "insecure" Foundry docker repo using http. These notes will convert that installation to secure using https.  This requires the installation of a trusted CA certificate on the system running docker.
 
 
 Run the following as root till told otherwise
@@ -14,9 +14,11 @@ systemctl stop docker
 systemctl stop kubelet
 ```
 
-Remove old insecure repo exception
+Remove old insecure repo exception by deleting the entire docker config file. Or edit and remove the insecure lines:
 ```
 rm /etc/docker/daemon.json
+# or
+vi /etc/docker/daemon.json
 ```
 
 Install the AT&T Foundry Atlanta CA cert at the system level.
