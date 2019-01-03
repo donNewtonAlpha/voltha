@@ -38,10 +38,10 @@ helm install -n onos cord/onos
 helm install -n xos-core cord/xos-core
 
 # Custom voltha config file to set image versions
-helm install -n voltha cord/voltha -f ~/source/voltha/k8s/foundry-node/dev/att-dev-seba-pod.yaml
+helm install -n voltha cord/voltha -f ~/source/voltha/k8s/foundry-node/dev/voltha-values.yaml
 
 helm install -n seba-service cord/seba-services
-helm install -n att-workflow cord/att-workflow
+helm install -n att-workflow cord/att-workflow --set att-workflow-driver.kafkaService=cord-kafka
 
 
 
