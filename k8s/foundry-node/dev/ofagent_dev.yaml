@@ -42,9 +42,6 @@ spec:
             - "--consul=consul.voltha.svc.cluster.local:8500"
             - "--controller=onos-openflow.default.svc.cluster.local:6653"
             - "--grpc-endpoint=vcore.voltha.svc.cluster.local:50556"
-            - "--enable-tls"
-            - "--key-file=/ofagent/pki/voltha.key"
-            - "--cert-file=/ofagent/pki/voltha.crt"
             - "-v"
           volumeMounts:
             - name: ofagent-logconfig-vol
