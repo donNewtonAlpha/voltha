@@ -70,6 +70,8 @@ waiting for device to be enabled...
 waiting for device to be enabled...
 success (device id = 000181c1314fa639)
 
+# Run devices again to see the olt and any onu being discovered
+(voltha) devices
 
 
 # In the onos cli verify the device was added, ports are enabled and that EAP was successful 
