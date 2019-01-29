@@ -34,6 +34,10 @@ sudo mkdir -p /var/lib/voltha-runtime
 sudo chown -R $(id -u):$(id -g) /var/lib/voltha-runtime
 
 
+# Build local docker images
+# Described here:
+https://github.com/donNewtonAlpha/voltha/blob/master/k8s/foundry-node/dev/build-notes.txt
+
 
 # Deploy dev voltha/onos
 cd ~/source/voltha/k8s/foundry-node/dev/
@@ -41,10 +45,10 @@ cd ~/source/voltha/k8s/foundry-node/dev/
 
 
 # Dev iteration
-./etcd-clean.sh purge
-# or
 ./dev-setup.sh redeploy
-# restart bal_core_dist/openolt on edgecore olt
+# Provision OLT, Restart bal_core_dist/openolt on edgecore olt
+# Described here:
+https://github.com/donNewtonAlpha/voltha/blob/master/k8s/foundry-node/dev/test-notes.txt
 
 
 # cleanup

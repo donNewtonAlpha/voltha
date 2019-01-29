@@ -1,0 +1,102 @@
+#
+# Provision an OLT and pass traffic in a basic voltha setup
+#
+
+
+## Verify Running Environment
+
+# SSH into the voltha cli pod by running the following.  Username voltha password admin
+ssh -p 30110 voltha@<your-real-ip>
+
+
+# Run "devices" to verify voltha can reach its components.  table empty is good
+
+(voltha) devices
+Devices:
+table empty
+
+
+# SSH into the onos cli by running the following.  Username karaf password karaf
+ssh -p 30115 karaf@<your-real-ip>
+
+# Run "apps" and "netcfg" to verify onos apps are loaded and device and sadis config exists
+
+onos> apps -s -a
+*   9 org.onosproject.hostprovider         1.13.5   Host Location Provider
+*  11 org.onosproject.optical-model        1.13.5   Optical Network Model
+*  12 org.onosproject.openflow-base        1.13.5   OpenFlow Base Provider
+*  32 org.onosproject.drivers              1.13.5   Default Drivers
+* 165 org.opencord.sadis                   2.2.0.SNAPSHOT Subscriber And Device Information App
+* 166 org.opencord.aaa                     1.8.0.SNAPSHOT AAA App
+* 167 org.opencord.config                  1.4.0    CORD Configuration Meta Application
+* 168 org.opencord.mcast                   1.4.0    CORD Multicast App
+* 169 org.opencord.igmpproxy               1.2.0    IGMP PROXY APP
+* 170 org.opencord.dhcpl2relay             1.5.0.SNAPSHOT DHCP Relay Agent App
+* 171 org.opencord.olt                     2.1.0.SNAPSHOT Optical Line Terminal App
+
+onos> netcfg
+{
+  "hosts" : { },
+  "devices" : {
+    "of:000000000a4001cd" : {
+      "basic" : {
+        "driver" : "pmc-olt"
+      },
+## lots of config here. must match your environment ##
+
+# Other useful onos commands
+
+onos> devices
+onos> ports
+onos> flows -s
+onos> log:display
+
+
+
+## Provision an OLT and Pass Traffic
+
+# Start BAL and OpenOLT agent on the edgecore olt
+# TODO: notes on bal_core and openolt agent on edgecore
+
+# Add and enable the edgecore olt. Via the voltha cli run the following commands 
+# to preprovision and enable the OLT (physical OLT).  Change 10.64.1.207 with the IP of your OLT:
+
+(voltha) preprovision_olt -t openolt -H 10.64.1.207:9191
+success (device id = 000181c1314fa639)
+
+(voltha) enable
+enabling 000181c1314fa639
+waiting for device to be enabled...
+waiting for device to be enabled...
+success (device id = 000181c1314fa639)
+
+
+
+# In the onos cli verify the device was added, ports are enabled and that EAP was successful 
+# check log:display throughout for details or errors
+
+onos> devices
+onos> ports
+onos> aaa-users
+
+# Example ports output:
+
+onos> ports
+id=of:000000000a4001cf, available=true, local-status=connected 17h25m ago, role=MASTER, type=SWITCH, mfr=VOLTHA Project, hw=, sw=, serial=10.64.1.207:9191, chassis=a4001cf, driver=pmc-olt, channelId=192.168.0.233:50612, locType=none, managementAddress=192.168.0.233, name=of:000000000a4001cf, protocol=OF_13
+  port=16, state=enabled, type=fiber, speed=0 , adminState=enabled, portMac=08:00:00:00:00:10, portName=BRCM33333333
+  port=65536, state=enabled, type=fiber, speed=0 , adminState=enabled, portMac=00:00:00:01:00:00, portName=nni-65536
+
+
+# In the onos cli add the subscriber vlans.  
+
+onos> volt-add-subscriber-access <openflow-device> <openflow-device-port>
+onos> volt-add-subscriber-access of:000000000a4001cf 16
+
+
+# Verify DHCP 
+
+onos> dhcpl2relay-allocations
+
+
+# Source traffic from LAN port on RG
+# login to raspberry pi on desk
