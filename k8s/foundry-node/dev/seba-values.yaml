@@ -1,0 +1,53 @@
+# ATT SEBA Voltha Helm Values
+
+voltha:
+  freeradius:
+    enabled: false
+  
+  etcd-cluster:
+    clusterSize: 1
+  
+  images:
+    vcore:
+      repository: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-voltha'
+      tag: 'matt-test'
+      pullPolicy: 'Always'
+  
+    vcli:
+      repository: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-cli'
+      tag: 'matt-test'
+      pullPolicy: 'Always'
+  
+    ofagent:
+      repository: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-ofagent'
+      tag: 'matt-test'
+      pullPolicy: 'Always'
+  
+    netconf:
+      repository: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-netconf'
+      tag: 'matt-test'
+      pullPolicy: 'Always'
+  
+    envoy_for_etcd:
+      repository: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-envoy'
+      tag: 'matt-test'
+      pullPolicy: 'Always'
+  
+    alarm_generator:
+      repository: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-alarm-generator'
+      tag: 'matt-test'
+      pullPolicy: 'Always'
+
+seba-services:
+  aaaAppUrl: "https://oss.sonatype.org/content/repositories/snapshots/org/opencord/aaa/1.8.0-SNAPSHOT/aaa-1.8.0-20181129.184849-116.oar"
+  aaaAppVersion: "1.8.0.SNAPSHOT"
+
+  sadisAppUrl: "https://oss.sonatype.org/content/repositories/snapshots/org/opencord/sadis-app/2.2.0-SNAPSHOT/sadis-app-2.2.0-20181127.081727-156.oar"
+  sadisAppVersion: "2.2.0.SNAPSHOT"
+
+  dhcpl2relayAppUrl: "https://oss.sonatype.org/content/repositories/snapshots/org/opencord/dhcpl2relay/1.5.0-SNAPSHOT/dhcpl2relay-1.5.0-20181129.184928-160.oar"
+  dhcpl2relayAppVersion: "1.5.0.SNAPSHOT"
+
+  oltAppUrl: "https://oss.sonatype.org/content/repositories/snapshots/org/opencord/olt-app/2.1.0-SNAPSHOT/olt-app-2.1.0-20181129.184957-41.oar"
+  oltAppVersion: "2.1.0.SNAPSHOT"
+

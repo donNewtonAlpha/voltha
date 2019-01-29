@@ -1,0 +1,6 @@
+
+images:
+  onos:
+    repository: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-onos'
+    tag: 'matt-test'
+    pullPolicy: 'Always'
