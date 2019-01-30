@@ -10,32 +10,32 @@ voltha:
   images:
     vcore:
       repository: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-voltha'
-      tag: 'matt-test'
+      tag: 'gold.1.29'
       pullPolicy: 'Always'
   
     vcli:
       repository: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-cli'
-      tag: 'matt-test'
+      tag: 'gold.1.29'
       pullPolicy: 'Always'
   
     ofagent:
       repository: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-ofagent'
-      tag: 'matt-test'
+      tag: 'gold.1.29'
       pullPolicy: 'Always'
   
     netconf:
       repository: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-netconf'
-      tag: 'matt-test'
+      tag: 'gold.1.29'
       pullPolicy: 'Always'
   
     envoy_for_etcd:
       repository: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-envoy'
-      tag: 'matt-test'
+      tag: 'gold.1.29'
       pullPolicy: 'Always'
   
     alarm_generator:
       repository: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-alarm-generator'
-      tag: 'matt-test'
+      tag: 'gold.1.29'
       pullPolicy: 'Always'
 
 seba-services:

@@ -33,18 +33,17 @@ kubectl get crd | grep etcd
 # Install voltha and seba
 helm repo add cord https://charts.opencord.org
 helm repo update
-helm install -n onos cord/onos
-helm install -n xos-core cord/xos-core
+helm install -n onos cord/onos --version=1.1.0
+helm install -n xos-core cord/xos-core --version=2.3.2
 
 # Custom voltha config file to set image versions
-helm install -n voltha cord/voltha -f voltha-values.yaml
+helm install -n voltha cord/voltha --version=1.0.4 -f voltha-values.yaml
 
-helm install -n seba-service cord/seba-services
-helm install -n att-workflow cord/att-workflow --set att-workflow-driver.kafkaService=cord-kafka
+helm install -n seba-service cord/seba-services --version=1.0.5 -f seba-services-values.yaml
+helm install -n att-workflow cord/att-workflow --version=1.0.2 --set att-workflow-driver.kafkaService=cord-kafka
 
 # wait for 2 tosca loader pods to report status Completed
 kubectl get pods --all-namespaces | grep tosca-loader
-
 
 
 # Add an /etc/hosts file entry for your local IP (not 127.0.0.1) pointing to seba-node1

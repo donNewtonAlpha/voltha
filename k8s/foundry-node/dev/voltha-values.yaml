@@ -8,32 +8,32 @@ etcd-cluster:
 
 images:
   vcore:
-    repository: 'voltha/voltha-voltha'
-    tag: '1.6.0'
+    repository: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-voltha'
+    tag: 'gold.1.29'
     pullPolicy: 'Always'
 
   vcli:
-    repository: 'voltha/voltha-cli'
-    tag: '1.6.0'
+    repository: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-cli'
+    tag: 'gold.1.29'
     pullPolicy: 'Always'
 
   ofagent:
-    repository: 'voltha/voltha-ofagent'
-    tag: '1.6.0'
+    repository: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-ofagent'
+    tag: 'gold.1.29'
     pullPolicy: 'Always'
 
   netconf:
-    repository: 'voltha/voltha-netconf'
-    tag: '1.6.0'
+    repository: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-netconf'
+    tag: 'gold.1.29'
     pullPolicy: 'Always'
 
   envoy_for_etcd:
-    repository: 'voltha/voltha-envoy'
-    tag: '1.6.0'
+    repository: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-envoy'
+    tag: 'gold.1.29'
     pullPolicy: 'Always'
 
   alarm_generator:
-    repository: 'voltha/voltha-alarm-generator'
-    tag: '1.6.0'
+    repository: 'docker-repo.dev.atl.foundry.att.com:5000/voltha-alarm-generator'
+    tag: 'gold.1.29'
     pullPolicy: 'Always'
 

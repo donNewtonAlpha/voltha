@@ -54,8 +54,8 @@ spec:
     spec:
       containers:
         - name: voltha
-          image: voltha-envoy:latest
-          imagePullPolicy: IfNotPresent
+          image: docker-repo.dev.atl.foundry.att.com:5000/voltha-envoy:gold.1.29
+          imagePullPolicy: Always
           env:
             - name: POD_IP
               valueFrom:

@@ -22,7 +22,7 @@ kubectl get crd | grep etcd
 
 
 helm install -n seba cord/seba --version=1.0.0
-helm install -n att-workflow cord/att-workflow
+helm install -n att-workflow cord/att-workflow --version=1.0.2
 
 # wait for 3 tosca loader pods to report status Completed
 kubectl get pods --all-namespaces | grep tosca-loader
