@@ -22,3 +22,11 @@ make build
 # Next time if you just want to rebuild the voltha container
 . env.sh
 make build voltha
+
+
+# if you need to push your image to the foundry docker repo, tag and push it.
+# for example the voltha-voltha latest image, if built locally:
+
+docker tag voltha-voltha:latest docker-repo.dev.atl.foundry.att.com:5000/voltha-voltha:your-tag-name
+docker push docker-repo.dev.atl.foundry.att.com:5000/voltha-voltha:your-tag-name
+
