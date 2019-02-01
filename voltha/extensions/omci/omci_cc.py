@@ -118,6 +118,7 @@ class OMCI_CC(object):
         # Support 2 levels of priority since only baseline message set supported
         self._tx_tid = [OMCI_CC.MIN_OMCI_TX_ID_LOW_PRIORITY, OMCI_CC.MIN_OMCI_TX_ID_HIGH_PRIORITY]
         self._tx_request = [None, None]    # Tx in progress (timestamp, defer, frame, timeout, retry, delayedCall)
+        self._tx_request_deferred = [None, None]    # Tx in progress but held till child Rx/TX can finish. ie omci tables.
         self._pending = [list(), list()]   # pending queue (deferred, tx_frame, timeout, retry)
         self._rx_response = [None, None]
 
@@ -427,7 +428,16 @@ class OMCI_CC(object):
         if a table attribute was requested.
         """
         omci_msg = rx_frame.fields['omci_message']
+        rx_tid = rx_frame.fields.get('transaction_id')
+        high_priority = self._tid_is_high_priority(rx_tid)
+        frame_index = self._get_priority_index(high_priority)
+
         if isinstance(omci_msg, OmciGetResponse) and 'table_attribute_mask' in omci_msg.fields['data']:
+
+            # save tx request for later so that below send/recv can finish
+            self._tx_request_deferred[frame_index] = self._tx_request[frame_index]
+            self._tx_request[frame_index] = None
+
             try:
                 entity_class = omci_msg.fields['entity_class']
                 entity_id = omci_msg.fields['entity_id']
@@ -440,7 +450,9 @@ class OMCI_CC(object):
                         attr_mask = 1 << index
 
                         if attr_mask & table_attributes:
-                            eca = ec.attributes[15-index]
+                            self.log.debug('omcc-get-table-ec', ec=ec, index=index, attr_mask=attr_mask,
+                                           table_attributes=table_attributes)
+                            eca = ec.attributes[index]
                             self.log.debug('omcc-get-table-attribute', table_name=eca.field.name)
 
                             seq_no = 0
@@ -494,15 +506,29 @@ class OMCI_CC(object):
 
             except Exception as e:
                 self.log.exception('get-next-error', e=e)
+                self._tx_request_deferred[frame_index] = None
                 d.errback(failure.Failure(e), high_priority)
                 return
 
-        # Notify sender of completed request
-        reactor.callLater(0, d.callback, rx_frame, high_priority)
+            except IndexError as e:
+                self.log.exception('get-next-index-error', e=e)
+                self._tx_request_deferred[frame_index] = None
+                d.errback(failure.Failure(e), high_priority)
+                return
 
-        # Publish Rx event to listeners in a different task except for internally-consumed get-next-response
+            # Put it back so the outer Rx/Tx can finish
+            self._tx_request[frame_index] = self._tx_request_deferred[frame_index]
+            self._tx_request_deferred[frame_index] = None
+
+        # Publish Rx event to listeners in a different task
         if not isinstance(omci_msg, OmciGetNextResponse):
             reactor.callLater(0, self._publish_rx_frame, tx_frame, rx_frame)
+
+        from copy import copy
+        original_callbacks = copy(d.callbacks)
+        self._rx_response[frame_index] = rx_frame
+        d.callback(rx_frame)
+        self.log.debug("finished-processing-get-rx-frame")
 
     def _decode_unknown_me(self, msg):
         """
@@ -772,6 +798,8 @@ class OMCI_CC(object):
         elif self._max_lp_tx_queue < qlen:
             self._max_lp_tx_queue = qlen
 
+        self.log.debug("queue-size", index=index, pending_qlen=qlen)
+
     def send(self, frame, timeout=DEFAULT_OMCI_TIMEOUT, retry=0, high_priority=False):
         """
         Queue the OMCI Frame for a transmit to the ONU via the proxy_channel
@@ -932,6 +960,8 @@ class OMCI_CC(object):
 
                 if d is not None:
                     d.errback(failure.Failure(e))
+        else:
+            self.log.debug("tx-request-occupied", index=index)
 
     ###################################################################################
     # MIB Action shortcuts
