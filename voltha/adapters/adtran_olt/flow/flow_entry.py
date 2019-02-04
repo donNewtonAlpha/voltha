@@ -25,10 +25,10 @@ log = structlog.get_logger()
 
 # IP Protocol numbers
 _supported_ip_protocols = [
-    1,          # ICMP
-    2,          # IGMP
-    6,          # TCP
-    17,         # UDP
+    1,  # ICMP
+    2,  # IGMP
+    6,  # TCP
+    17, # UDP
 ]
 
 
@@ -92,7 +92,7 @@ class FlowEntry(object):
         self._bandwidth = None
 
         # A value used to locate possible related flow entries
-        self.signature = None
+        self._signature = None
         self.downstream_signature = None  # Valid for upstream EVC-MAP Flows
 
         # Selection properties
@@ -112,7 +112,7 @@ class FlowEntry(object):
         self.push_vlan_tpid = None
         self.push_vlan_id = None
 
-        self._name = self.create_flow_name()
+        self._name = None
 
     def __str__(self):
         return 'flow_entry: {}, in: {}, out: {}, vid: {}, inner:{}, eth: {}, IP: {}'.format(
@@ -124,10 +124,9 @@ class FlowEntry(object):
 
     @property
     def name(self):
+        if self._name is None:
+            self._name = 'flow-{}-{}'.format(self.device_id, self.flow_id)
         return self._name    # TODO: Is a name really needed in production?
-
-    def create_flow_name(self):
-        return 'flow-{}-{}'.format(self.device_id, self.flow_id)
 
     @property
     def flow(self):
@@ -194,8 +193,8 @@ class FlowEntry(object):
             ######################################################################
             # Initialize flow_entry database (dicts) if needed and determine if
             # the flows have already been handled.
-            downstream_sig_table = handler.downstream_flows
-            upstream_flow_table = handler.upstream_flows
+            downstream_sig_table = flow_entry.handler.downstream_flows
+            upstream_flow_table = flow_entry.handler.upstream_flows
 
             log.debug('flow-entry-decoded', flow=flow_entry, signature=flow_entry.signature,
                       downstream_signature=flow_entry.downstream_signature)
@@ -364,6 +363,41 @@ class FlowEntry(object):
         return self.eth_type is not None or self.ip_protocol is not None or\
             self.ipv4_dst is not None or self.udp_dst is not None or self.udp_src is not None
 
+    @property
+    def signature(self):
+        if self._signature is None:
+            # These are not exact, just ones that may be put together to make an EVC. The
+            # basic rules are:
+            #
+            # 1 - Port numbers in increasing order
+            ports = sorted(filter(None, [self.in_port, self.output]))
+            assert len(ports) == 2, 'Invalid port count: {}'.format(len(ports))
+
+            # 3 - The outer VID
+            # 4 - The inner VID.  Wildcard if downstream
+            if self.push_vlan_id is None:
+                outer = self.vlan_id
+                inner = self.inner_vid
+            else:
+                outer = self.push_vlan_id
+                inner = self.vlan_id
+
+            downstream_sig = '.'.join(map(str, (
+                ports[0],
+                ports[1] if self.handler.is_nni_port(ports[1]) else '*',
+                outer,
+                '*'
+            )))
+
+            if self._flow_direction in FlowEntry.downstream_flow_types:
+                self._signature = downstream_sig
+            elif self._flow_direction in FlowEntry.upstream_flow_types:
+                self._signature = '.'.join(map(str, (ports[0], ports[1], outer, inner)))
+                self.downstream_signature = downstream_sig
+            else:
+                log.error('unsupported-flow')
+        return self._signature
+
     def _decode(self, flow):
         """
         Examine flow rules and extract appropriate settings
@@ -394,42 +428,7 @@ class FlowEntry(object):
 
         # Create a signature that will help locate related flow entries on a device.
         if status:
-            # These are not exact, just ones that may be put together to make an EVC. The
-            # basic rules are:
-            #
-            # 1 - Port numbers in increasing order
-            ports = [self.in_port, self.output]
-            ports.sort()
-            assert len(ports) == 2, 'Invalid port count: {}'.format(len(ports))
-
-            # 3 - The outer VID
-            # 4 - The inner VID.  Wildcard if downstream
-            if self.push_vlan_id is None:
-                outer = self.vlan_id
-                inner = self.inner_vid
-            else:
-                outer = self.push_vlan_id
-                inner = self.vlan_id
-
-            upstream_sig = '{}'.format(ports[0])
-            downstream_sig = '{}'.format(ports[0])
-            upstream_sig += '.{}'.format(ports[1])
-            downstream_sig += '.{}'.format(ports[1] if self.handler.is_nni_port(ports[1]) else '*')
-
-            upstream_sig += '.{}.{}'.format(outer, inner)
-            downstream_sig += '.{}.*'.format(outer)
-
-            if self._flow_direction in FlowEntry.downstream_flow_types:
-                self.signature = downstream_sig
-
-            elif self._flow_direction in FlowEntry.upstream_flow_types:
-                self.signature = upstream_sig
-                self.downstream_signature = downstream_sig
-
-            else:
-                log.error('unsupported-flow')
-                status = False
-
+            status = self.signature is not None
             log.debug('flow-evc-decode', upstream_sig=self.signature, downstream_sig=self.downstream_signature)
         return status
 
@@ -494,11 +493,11 @@ class FlowEntry(object):
                         vid = field.table_metadata & 0x0FFF
                         if vid > 0:
                             self.inner_vid = vid        # CTag is never '0'
-
+                
                     elif field.table_metadata > 0:
                         # Pre-ONOS v1.13.5 (vid without the 4096 offset)
                         self.inner_vid = field.table_metadata
-
+                
                 else:
                     # Upstream flow
                     pass   # Not used upstream at this time
@@ -600,7 +599,7 @@ class FlowEntry(object):
             # Utility VLAN downstream flow/EVC
             self._is_acl_flow = True
 
-        elif self.vlan_id in self._handler.multicast_vlans:
+        elif self.vlan_id in self.handler.multicast_vlans:
             #  multicast (ethType = IP)                         # TODO: May need to be an NNI_PON flow
             self._is_multicast = True
             self._is_acl_flow = True
@@ -783,8 +782,8 @@ class FlowEntry(object):
 
         :param handler: voltha adapter device handler
         """
-        handler.downstream_flows.clear_all()
-        handler.upstream_flows.clear_all()
+        handler.downstream_flows.clear()
+        handler.upstream_flows.clear()
 
     @staticmethod
     def get_packetout_info(handler, logical_port):
