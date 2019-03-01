@@ -21,7 +21,7 @@ import hashlib
 from simplejson import dumps
 
 from voltha.protos.openflow_13_pb2 import OFPXMC_OPENFLOW_BASIC, \
-    ofp_flow_stats, OFPMT_OXM, Flows, FlowGroups, OFPXMT_OFB_IN_PORT, \
+    ofp_flow_stats, OFPMT_OXM, Flows, FlowGroups, \
     OFPXMT_OFB_VLAN_VID
 from voltha.protos.device_pb2 import Port
 import voltha.core.flow_decomposer as fd
@@ -40,6 +40,7 @@ IGMP_PROTO = 2
 
 # FIXME - see also BRDCM_DEFAULT_VLAN in broadcom_onu.py
 DEFAULT_MGMT_VLAN = 4091
+RESERVED_VLAN = 4095
 
 # Openolt Flow
 UPSTREAM = "upstream"
@@ -70,14 +71,13 @@ TRAP_TO_HOST = 'trap_to_host'
 
 class OpenOltFlowMgr(object):
 
-    def __init__(self, adapter_agent, log, stub, device_id, logical_device_id,
-                 platform, resource_mgr):
-        self.adapter_agent = adapter_agent
+    def __init__(self, log, stub, device_id, logical_device_id,
+                 platform, resource_mgr, data_model):
+        self.data_model = data_model
         self.log = log
         self.stub = stub
         self.device_id = device_id
         self.logical_device_id = logical_device_id
-        self.nni_intf_id = None
         self.platform = platform
         self.logical_flows_proxy = registry('core').get_proxy(
             '/logical_devices/{}/flows'.format(self.logical_device_id))
@@ -156,7 +156,8 @@ class OpenOltFlowMgr(object):
                 action_info[PUSH_VLAN] = True
                 action_info[TPID] = action.push.ethertype
                 self.log.debug('action-type-push-vlan',
-                               push_tpid=action_info[TPID], in_port=classifier_info[IN_PORT])
+                               push_tpid=action_info[TPID],
+                               in_port=classifier_info[IN_PORT])
                 if action.push.ethertype != 0x8100:
                     self.log.error('unhandled-tpid',
                                    ethertype=action.push.ethertype)
@@ -176,9 +177,11 @@ class OpenOltFlowMgr(object):
                                    field_type=_field.type)
             else:
                 self.log.error('unsupported-action-type',
-                               action_type=action.type, in_port=classifier_info[IN_PORT])
+                               action_type=action.type,
+                               in_port=classifier_info[IN_PORT])
 
-        if fd.get_goto_table_id(flow) is not None and POP_VLAN not in action_info:
+        if fd.get_goto_table_id(flow) is not None \
+                and POP_VLAN not in action_info:
             self.log.debug('being taken care of by ONU', flow=flow)
             return
 
@@ -192,62 +195,33 @@ class OpenOltFlowMgr(object):
                 if field.type == fd.VLAN_VID:
                     classifier_info[METADATA] = field.vlan_vid & 0xfff
 
-        self.log.debug('flow-ports', classifier_inport=classifier_info[IN_PORT], action_output=action_info[OUTPUT])
-        (port_no, intf_id, onu_id, uni_id) = self.platform.extract_access_from_flow(
+        self.log.debug('flow-ports',
+                       classifier_inport=classifier_info[IN_PORT],
+                       action_output=action_info[OUTPUT])
+        (port_no, intf_id, onu_id, uni_id) \
+            = self.platform.extract_access_from_flow(
             classifier_info[IN_PORT], action_info[OUTPUT])
 
-        self.divide_and_add_flow(intf_id, onu_id, uni_id, port_no, classifier_info,
-                                 action_info, flow)
-
-    def _is_uni_port(self, port_no):
-        try:
-            port = self.adapter_agent.get_logical_port(self.logical_device_id,
-                                                       'uni-{}'.format(port_no))
-            if port is not None:
-                return (not port.root_port), port.device_id
-            else:
-                return False, None
-        except Exception as e:
-            self.log.error("error-retrieving-port", e=e)
-            return False, None
+        self.divide_and_add_flow(intf_id, onu_id, uni_id, port_no,
+                                 classifier_info, action_info, flow)
 
     def _clear_flow_id_from_rm(self, flow, flow_id, flow_direction):
-        uni_port_no = None
-        child_device_id = None
-        if flow_direction == UPSTREAM:
-            for field in fd.get_ofb_fields(flow):
-                if field.type == fd.IN_PORT:
-                    is_uni, child_device_id = self._is_uni_port(field.port)
-                    if is_uni:
-                        uni_port_no = field.port
-        elif flow_direction == DOWNSTREAM:
-            for field in fd.get_ofb_fields(flow):
-                if field.type == fd.METADATA:
-                    uni_port = field.table_metadata & 0xFFFFFFFF
-                    is_uni, child_device_id = self._is_uni_port(uni_port)
-                    if is_uni:
-                        uni_port_no = field.port
-
-            if uni_port_no is None:
-                for action in fd.get_actions(flow):
-                    if action.type == fd.OUTPUT:
-                        is_uni, child_device_id = \
-                            self._is_uni_port(action.output.port)
-                        if is_uni:
-                            uni_port_no = action.output.port
-
-        if child_device_id:
-            child_device = self.adapter_agent.get_device(child_device_id)
-            pon_intf = child_device.proxy_address.channel_id
-            onu_id = child_device.proxy_address.onu_id
-            uni_id = self.platform.uni_id_from_port_num(uni_port_no) if uni_port_no is not None else None
-            flows = self.resource_mgr.get_flow_id_info(pon_intf, onu_id, uni_id, flow_id)
+        try:
+            pon_intf, onu_id, uni_id \
+                = self.data_model._flow_extract_info(flow, flow_direction)
+        except ValueError:
+            self.log.error("failure extracting pon_intf, onu_id, uni_id info \
+                           from flow")
+        else:
+            flows = self.resource_mgr.get_flow_id_info(pon_intf, onu_id,
+                                                       uni_id, flow_id)
             assert (isinstance(flows, list))
             self.log.debug("retrieved-flows", flows=flows)
             for idx in range(len(flows)):
                 if flow_direction == flows[idx]['flow_type']:
                     flows.pop(idx)
-                    self.update_flow_info_to_kv_store(pon_intf, onu_id, uni_id, flow_id, flows)
+                    self.update_flow_info_to_kv_store(pon_intf, onu_id,
+                                                      uni_id, flow_id, flows)
                     if len(flows) > 0:
                         # There are still flows referencing the same flow_id.
                         # So the flow should not be freed yet.
@@ -256,9 +230,6 @@ class OpenOltFlowMgr(object):
                         return
 
             self.resource_mgr.free_flow_id(pon_intf, onu_id, uni_id, flow_id)
-        else:
-            self.log.error("invalid-info", uni_port_no=uni_port_no,
-                           child_device_id=child_device_id)
 
     def retry_add_flow(self, flow):
         self.log.debug("retry-add-flow")
@@ -307,49 +278,37 @@ class OpenOltFlowMgr(object):
                            flow_ids_removed=flows_ids_to_remove,
                            number_of_flows_removed=(len(device_flows) - len(
                                new_flows)), expected_flows_removed=len(
-                    device_flows_to_remove))
+                                   device_flows_to_remove))
         else:
             self.log.debug('no device flow to remove for this flow (normal '
                            'for multi table flows)', flow=flow)
 
-    def _get_ofp_port_name(self, intf_id, onu_id, uni_id):
-        parent_port_no = self.platform.intf_id_to_port_no(intf_id, Port.PON_OLT)
-        child_device = self.adapter_agent.get_child_device(self.device_id,
-                                                           parent_port_no=parent_port_no, onu_id=onu_id)
-        if child_device is None:
-            self.log.error("could-not-find-child-device",
-                           parent_port_no=intf_id, onu_id=onu_id)
-            return (None, None)
-        ports = self.adapter_agent.get_ports(child_device.id, Port.ETHERNET_UNI)
-        logical_port = self.adapter_agent.get_logical_port(
-            self.logical_device_id, ports[uni_id].label)
-        ofp_port_name = (logical_port.ofp_port.name, logical_port.ofp_port.port_no)
-        return ofp_port_name
-
-    def get_tp_path(self, intf_id, ofp_port_name):
-        # FIXME Should get Table id form the flow, as of now hardcoded to
-        # DEFAULT_TECH_PROFILE_TABLE_ID (64)
-        # 'tp_path' contains the suffix part of the tech_profile_instance path.
-        # The prefix to the 'tp_path' should be set to \
-        # TechProfile.KV_STORE_TECH_PROFILE_PATH_PREFIX by the ONU adapter.
+    def get_tp_path(self, intf_id, ofp_port_name, techprofile_id):
         return self.tech_profile[intf_id]. \
-            get_tp_path(DEFAULT_TECH_PROFILE_TABLE_ID,
+            get_tp_path(techprofile_id,
                         ofp_port_name)
 
-    def delete_tech_profile_instance(self, intf_id, onu_id, uni_id):
+    def delete_tech_profile_instance(self, intf_id, onu_id, uni_id,
+                                     ofp_port_name):
         # Remove the TP instance associated with the ONU
-        ofp_port_name = self._get_ofp_port_name(intf_id, onu_id, uni_id)
-        tp_path = self.get_tp_path(intf_id, ofp_port_name)
+        if ofp_port_name is None:
+            ofp_port_name, ofp_port_no \
+                = self.data_model._get_ofp_port_name(intf_id, onu_id, uni_id)
+        tp_id = self.resource_mgr.get_tech_profile_id_for_onu(intf_id, onu_id,
+                                                              uni_id)
+        tp_path = self.get_tp_path(intf_id, ofp_port_name, tp_id)
+        self.log.debug(" tp-path-in-delete", tp_path=tp_path)
         return self.tech_profile[intf_id].delete_tech_profile_instance(tp_path)
 
     def divide_and_add_flow(self, intf_id, onu_id, uni_id, port_no, classifier,
                             action, flow):
 
-        self.log.debug('sorting flow', intf_id=intf_id, onu_id=onu_id, uni_id=uni_id, port_no=port_no,
-                       classifier=classifier, action=action)
+        self.log.debug('sorting flow', intf_id=intf_id, onu_id=onu_id,
+                       uni_id=uni_id, port_no=port_no, classifier=classifier,
+                       action=action)
 
-        alloc_id, gem_ports = self.create_tcont_gemport(intf_id, onu_id, uni_id,
-                                                        flow.table_id)
+        alloc_id, gem_ports = self.create_tcont_gemport(intf_id, onu_id,
+                                                        uni_id, flow.table_id)
         if alloc_id is None or gem_ports is None:
             self.log.error("alloc-id-gem-ports-unavailable", alloc_id=alloc_id,
                            gem_ports=gem_ports)
@@ -364,8 +323,9 @@ class OpenOltFlowMgr(object):
             if IP_PROTO in classifier:
                 if classifier[IP_PROTO] == 17:
                     self.log.debug('dhcp flow add')
-                    self.add_dhcp_trap(intf_id, onu_id, uni_id, port_no, classifier,
-                                       action, flow, alloc_id, gemport_id)
+                    self.add_dhcp_trap(intf_id, onu_id, uni_id, port_no,
+                                       classifier, action, flow, alloc_id,
+                                       gemport_id)
                 elif classifier[IP_PROTO] == 2:
                     self.log.warn('igmp flow add ignored, not implemented yet')
                 else:
@@ -375,44 +335,41 @@ class OpenOltFlowMgr(object):
             elif ETH_TYPE in classifier:
                 if classifier[ETH_TYPE] == EAP_ETH_TYPE:
                     self.log.debug('eapol flow add')
-                    self.add_eapol_flow(intf_id, onu_id, uni_id, port_no, flow, alloc_id,
-                                        gemport_id)
+                    self.add_eapol_flow(intf_id, onu_id, uni_id, port_no,
+                                        flow, alloc_id, gemport_id)
                     vlan_id = self.get_subscriber_vlan(fd.get_in_port(flow))
                     if vlan_id is not None:
-                        self.add_eapol_flow(
-                            intf_id, onu_id, uni_id, port_no, flow, alloc_id, gemport_id,
-                            vlan_id=vlan_id)
-                    parent_port_no = self.platform.intf_id_to_port_no(intf_id, Port.PON_OLT)
-                    onu_device = self.adapter_agent.get_child_device(self.device_id,
-                                                                     onu_id=onu_id,
-                                                                     parent_port_no=parent_port_no)
-                    (ofp_port_name, ofp_port_no) = self._get_ofp_port_name(intf_id, onu_id, uni_id)
+                        self.add_eapol_flow(intf_id, onu_id, uni_id, port_no,
+                                            flow, alloc_id, gemport_id,
+                                            vlan_id=vlan_id)
+                    (ofp_port_name, ofp_port_no) \
+                        = self.data_model._get_ofp_port_name(intf_id, onu_id,
+                                                             uni_id)
                     if ofp_port_name is None:
                         self.log.error("port-name-not-found")
                         return
-
-                    tp_path = self.get_tp_path(intf_id, ofp_port_name)
+                    tp_id = self.resource_mgr.get_tech_profile_id_for_onu(
+                        intf_id, onu_id, uni_id)
+                    tp_path = self.get_tp_path(intf_id, ofp_port_name, tp_id)
 
                     self.log.debug('Load-tech-profile-request-to-brcm-handler',
                                    tp_path=tp_path)
-                    msg = {'proxy_address': onu_device.proxy_address, 'uni_id': uni_id,
-                           'event': 'download_tech_profile', 'event_data': tp_path}
-
-                    # Send the event message to the ONU adapter
-                    self.adapter_agent.publish_inter_adapter_message(onu_device.id,
-                                                                     msg)
+                    self.data_model.onu_download_tech_profile(
+                        intf_id, onu_id, uni_id, tp_path)
 
                 if classifier[ETH_TYPE] == LLDP_ETH_TYPE:
                     self.log.debug('lldp flow add')
-                    nni_intf_id = self.get_nni_intf_id()
+                    nni_intf_id = self.data_model.olt_nni_intf_id()
                     self.add_lldp_flow(flow, port_no, nni_intf_id)
 
             elif PUSH_VLAN in action:
-                self.add_upstream_data_flow(intf_id, onu_id, uni_id, port_no, classifier,
-                                            action, flow, alloc_id, gemport_id)
+                self.add_upstream_data_flow(intf_id, onu_id, uni_id, port_no,
+                                            classifier, action, flow, alloc_id,
+                                            gemport_id)
             elif POP_VLAN in action:
-                self.add_downstream_data_flow(intf_id, onu_id, uni_id, port_no, classifier,
-                                              action, flow, alloc_id, gemport_id)
+                self.add_downstream_data_flow(intf_id, onu_id, uni_id, port_no,
+                                              classifier, action, flow,
+                                              alloc_id, gemport_id)
             else:
                 self.log.debug('Invalid-flow-type-to-handle',
                                classifier=classifier,
@@ -422,7 +379,8 @@ class OpenOltFlowMgr(object):
         alloc_id, gem_port_ids = None, None
         pon_intf_onu_id = (intf_id, onu_id)
 
-        # If we already have allocated alloc_id and gem_ports earlier, render them
+        # If we already have allocated alloc_id and gem_ports earlier,
+        # render them
         alloc_id = \
             self.resource_mgr.get_current_alloc_ids_for_onu(pon_intf_onu_id)
         gem_port_ids = \
@@ -431,7 +389,8 @@ class OpenOltFlowMgr(object):
             return alloc_id, gem_port_ids
 
         try:
-            (ofp_port_name, ofp_port_no) = self._get_ofp_port_name(intf_id, onu_id, uni_id)
+            (ofp_port_name, ofp_port_no) \
+                = self.data_model._get_ofp_port_name(intf_id, onu_id, uni_id)
             if ofp_port_name is None:
                 self.log.error("port-name-not-found")
                 return alloc_id, gem_port_ids
@@ -442,7 +401,8 @@ class OpenOltFlowMgr(object):
             # Check tech profile instance already exists for derived port name
             tech_profile_instance = self.tech_profile[intf_id]. \
                 get_tech_profile_instance(table_id, ofp_port_name)
-            self.log.debug('Get-tech-profile-instance-status', tech_profile_instance=tech_profile_instance)
+            self.log.debug('Get-tech-profile-instance-status',
+                           tech_profile_instance=tech_profile_instance)
 
             if tech_profile_instance is None:
                 # create tech profile instance
@@ -463,9 +423,8 @@ class OpenOltFlowMgr(object):
             ds_scheduler = self.tech_profile[intf_id].get_ds_scheduler(
                 tech_profile_instance)
             # create Tcont
-            tconts = self.tech_profile[intf_id].get_tconts(tech_profile_instance,
-                                                           us_scheduler,
-                                                           ds_scheduler)
+            tconts = self.tech_profile[intf_id].get_tconts(
+                tech_profile_instance, us_scheduler, ds_scheduler)
 
             self.stub.CreateTconts(openolt_pb2.Tconts(intf_id=intf_id,
                                                       onu_id=onu_id,
@@ -484,7 +443,8 @@ class OpenOltFlowMgr(object):
         except BaseException as e:
             self.log.exception(exception=e)
 
-        # Update the allocated alloc_id and gem_port_id for the ONU/UNI to KV store
+        # Update the allocated alloc_id and gem_port_id for the ONU/UNI to KV
+        # store
         pon_intf_onu_id = (intf_id, onu_id, uni_id)
         self.resource_mgr.resource_mgrs[intf_id].update_alloc_ids_for_onu(
             pon_intf_onu_id,
@@ -501,9 +461,9 @@ class OpenOltFlowMgr(object):
 
         return alloc_id, gem_port_ids
 
-    def add_upstream_data_flow(self, intf_id, onu_id, uni_id, port_no, uplink_classifier,
-                               uplink_action, logical_flow, alloc_id,
-                               gemport_id):
+    def add_upstream_data_flow(self, intf_id, onu_id, uni_id, port_no,
+                               uplink_classifier, uplink_action, logical_flow,
+                               alloc_id, gemport_id):
 
         uplink_classifier[PACKET_TAG_TYPE] = SINGLE_TAG
 
@@ -512,29 +472,33 @@ class OpenOltFlowMgr(object):
                            logical_flow, alloc_id, gemport_id)
 
         # Secondary EAP on the subscriber vlan
-        (eap_active, eap_logical_flow) = self.is_eap_enabled(intf_id, onu_id, uni_id)
+        (eap_active, eap_logical_flow) = self.is_eap_enabled(intf_id, onu_id,
+                                                             uni_id)
         if eap_active:
-            self.add_eapol_flow(intf_id, onu_id, uni_id, port_no, eap_logical_flow, alloc_id,
-                                gemport_id, vlan_id=uplink_classifier[VLAN_VID])
+            self.add_eapol_flow(intf_id, onu_id, uni_id, port_no,
+                                eap_logical_flow, alloc_id, gemport_id,
+                                vlan_id=uplink_classifier[VLAN_VID])
 
-    def add_downstream_data_flow(self, intf_id, onu_id, uni_id, port_no, downlink_classifier,
-                                 downlink_action, flow, alloc_id, gemport_id):
+    def add_downstream_data_flow(self, intf_id, onu_id, uni_id, port_no,
+                                 downlink_classifier, downlink_action, flow,
+                                 alloc_id, gemport_id):
         downlink_classifier[PACKET_TAG_TYPE] = DOUBLE_TAG
         # Needed ???? It should be already there
         downlink_action[POP_VLAN] = True
         downlink_action[VLAN_VID] = downlink_classifier[VLAN_VID]
 
-        self.add_hsia_flow(intf_id, onu_id, uni_id, port_no, downlink_classifier,
-                           downlink_action, DOWNSTREAM,
+        self.add_hsia_flow(intf_id, onu_id, uni_id, port_no,
+                           downlink_classifier, downlink_action, DOWNSTREAM,
                            flow, alloc_id, gemport_id)
 
-    def add_hsia_flow(self, intf_id, onu_id, uni_id, port_no, classifier, action,
-                      direction, logical_flow, alloc_id, gemport_id):
+    def add_hsia_flow(self, intf_id, onu_id, uni_id, port_no, classifier,
+                      action, direction, logical_flow, alloc_id, gemport_id):
 
         flow_store_cookie = self._get_flow_store_cookie(classifier,
                                                         gemport_id)
 
-        if self.resource_mgr.is_flow_cookie_on_kv_store(intf_id, onu_id, uni_id,
+        if self.resource_mgr.is_flow_cookie_on_kv_store(intf_id, onu_id,
+                                                        uni_id,
                                                         flow_store_cookie):
             self.log.debug('flow-exists--not-re-adding')
         else:
@@ -553,14 +517,13 @@ class OpenOltFlowMgr(object):
                 return
 
             flow = openolt_pb2.Flow(
-                access_intf_id=intf_id, onu_id=onu_id, uni_id=uni_id, flow_id=flow_id,
-                flow_type=direction, alloc_id=alloc_id, network_intf_id=self.get_nni_intf_id(),
+                access_intf_id=intf_id, onu_id=onu_id, uni_id=uni_id,
+                flow_id=flow_id, flow_type=direction, alloc_id=alloc_id,
+                network_intf_id=self.data_model.olt_nni_intf_id(),
                 gemport_id=gemport_id,
                 classifier=self.mk_classifier(classifier),
-                action=self.mk_action(action),
-                priority=logical_flow.priority,
-                port_no=port_no,
-                cookie=logical_flow.cookie)
+                action=self.mk_action(action), priority=logical_flow.priority,
+                port_no=port_no, cookie=logical_flow.cookie)
 
             if self.add_flow_to_device(flow, logical_flow):
                 flow_info = self._get_flow_info_as_json_blob(flow,
@@ -570,11 +533,12 @@ class OpenOltFlowMgr(object):
                                                   flow.onu_id, flow.uni_id,
                                                   flow.flow_id, flow_info)
 
-    def add_dhcp_trap(self, intf_id, onu_id, uni_id, port_no, classifier, action, logical_flow,
-                      alloc_id, gemport_id):
+    def add_dhcp_trap(self, intf_id, onu_id, uni_id, port_no, classifier,
+                      action, logical_flow, alloc_id, gemport_id):
 
         self.log.debug('add dhcp upstream trap', classifier=classifier,
-                       intf_id=intf_id, onu_id=onu_id, uni_id=uni_id, action=action)
+                       intf_id=intf_id, onu_id=onu_id, uni_id=uni_id,
+                       action=action)
 
         action.clear()
         action[TRAP_TO_HOST] = True
@@ -585,7 +549,8 @@ class OpenOltFlowMgr(object):
 
         flow_store_cookie = self._get_flow_store_cookie(classifier,
                                                         gemport_id)
-        if self.resource_mgr.is_flow_cookie_on_kv_store(intf_id, onu_id, uni_id,
+        if self.resource_mgr.is_flow_cookie_on_kv_store(intf_id, onu_id,
+                                                        uni_id,
                                                         flow_store_cookie):
             self.log.debug('flow-exists--not-re-adding')
         else:
@@ -594,9 +559,10 @@ class OpenOltFlowMgr(object):
             )
 
             dhcp_flow = openolt_pb2.Flow(
-                onu_id=onu_id, uni_id=uni_id, flow_id=flow_id, flow_type=UPSTREAM,
-                access_intf_id=intf_id, gemport_id=gemport_id,
-                alloc_id=alloc_id, network_intf_id=self.get_nni_intf_id(),
+                onu_id=onu_id, uni_id=uni_id, flow_id=flow_id,
+                flow_type=UPSTREAM, access_intf_id=intf_id,
+                gemport_id=gemport_id, alloc_id=alloc_id,
+                network_intf_id=self.data_model.olt_nni_intf_id(),
                 priority=logical_flow.priority,
                 classifier=self.mk_classifier(classifier),
                 action=self.mk_action(action),
@@ -604,15 +570,16 @@ class OpenOltFlowMgr(object):
                 cookie=logical_flow.cookie)
 
             if self.add_flow_to_device(dhcp_flow, logical_flow):
-                flow_info = self._get_flow_info_as_json_blob(dhcp_flow, flow_store_cookie)
+                flow_info = self._get_flow_info_as_json_blob(dhcp_flow,
+                                                             flow_store_cookie)
                 self.update_flow_info_to_kv_store(dhcp_flow.access_intf_id,
                                                   dhcp_flow.onu_id,
                                                   dhcp_flow.uni_id,
                                                   dhcp_flow.flow_id,
                                                   flow_info)
 
-    def add_eapol_flow(self, intf_id, onu_id, uni_id, port_no, logical_flow, alloc_id,
-                       gemport_id, vlan_id=DEFAULT_MGMT_VLAN):
+    def add_eapol_flow(self, intf_id, onu_id, uni_id, port_no, logical_flow,
+                       alloc_id, gemport_id, vlan_id=DEFAULT_MGMT_VLAN):
 
         uplink_classifier = dict()
         uplink_classifier[ETH_TYPE] = EAP_ETH_TYPE
@@ -625,7 +592,8 @@ class OpenOltFlowMgr(object):
         flow_store_cookie = self._get_flow_store_cookie(uplink_classifier,
                                                         gemport_id)
 
-        if self.resource_mgr.is_flow_cookie_on_kv_store(intf_id, onu_id, uni_id,
+        if self.resource_mgr.is_flow_cookie_on_kv_store(intf_id, onu_id,
+                                                        uni_id,
                                                         flow_store_cookie):
             self.log.debug('flow-exists--not-re-adding')
         else:
@@ -635,8 +603,9 @@ class OpenOltFlowMgr(object):
             )
 
             upstream_flow = openolt_pb2.Flow(
-                access_intf_id=intf_id, onu_id=onu_id, uni_id=uni_id, flow_id=uplink_flow_id,
-                flow_type=UPSTREAM, alloc_id=alloc_id, network_intf_id=self.get_nni_intf_id(),
+                access_intf_id=intf_id, onu_id=onu_id, uni_id=uni_id,
+                flow_id=uplink_flow_id, flow_type=UPSTREAM, alloc_id=alloc_id,
+                network_intf_id=self.data_model.olt_nni_intf_id(),
                 gemport_id=gemport_id,
                 classifier=self.mk_classifier(uplink_classifier),
                 action=self.mk_action(uplink_action),
@@ -669,7 +638,7 @@ class OpenOltFlowMgr(object):
             # uni_id defaults to 0, so add 1 to it.
             special_vlan_downstream_flow = 4090 - intf_id * onu_id * (uni_id+1)
             # Assert that we do not generate invalid vlans under no condition
-            assert (special_vlan_downstream_flow >= 2, 'invalid-vlan-generated')
+            assert special_vlan_downstream_flow >= 2
 
             downlink_classifier = dict()
             downlink_classifier[PACKET_TAG_TYPE] = SINGLE_TAG
@@ -679,11 +648,10 @@ class OpenOltFlowMgr(object):
             downlink_action[PUSH_VLAN] = True
             downlink_action[VLAN_VID] = vlan_id
 
-
-            flow_store_cookie = self._get_flow_store_cookie(downlink_classifier,
-                                                            gemport_id)
-            if self.resource_mgr.is_flow_cookie_on_kv_store(intf_id, onu_id, uni_id,
-                                                            flow_store_cookie):
+            flow_store_cookie = self._get_flow_store_cookie(
+                downlink_classifier, gemport_id)
+            if self.resource_mgr.is_flow_cookie_on_kv_store(
+                    intf_id, onu_id, uni_id, flow_store_cookie):
                 self.log.debug('flow-exists--not-re-adding')
             else:
 
@@ -692,8 +660,10 @@ class OpenOltFlowMgr(object):
                 )
 
                 downstream_flow = openolt_pb2.Flow(
-                    access_intf_id=intf_id, onu_id=onu_id, uni_id=uni_id, flow_id=downlink_flow_id,
-                    flow_type=DOWNSTREAM, alloc_id=alloc_id, network_intf_id=self.get_nni_intf_id(),
+                    access_intf_id=intf_id, onu_id=onu_id, uni_id=uni_id,
+                    flow_id=downlink_flow_id, flow_type=DOWNSTREAM,
+                    alloc_id=alloc_id,
+                    network_intf_id=self.data_model.olt_nni_intf_id(),
                     gemport_id=gemport_id,
                     classifier=self.mk_classifier(downlink_classifier),
                     action=self.mk_action(downlink_action),
@@ -703,26 +673,28 @@ class OpenOltFlowMgr(object):
 
                 downstream_logical_flow = ofp_flow_stats(
                     id=logical_flow.id, cookie=logical_flow.cookie,
-                    table_id=logical_flow.table_id, priority=logical_flow.priority,
-                    flags=logical_flow.flags)
+                    table_id=logical_flow.table_id,
+                    priority=logical_flow.priority, flags=logical_flow.flags)
 
-                downstream_logical_flow.match.oxm_fields.extend(fd.mk_oxm_fields([
-                    fd.in_port(fd.get_out_port(logical_flow)),
-                    fd.vlan_vid(special_vlan_downstream_flow | 0x1000)]))
+                downstream_logical_flow.match.oxm_fields.extend(
+                    fd.mk_oxm_fields(
+                        [fd.in_port(fd.get_out_port(logical_flow)),
+                         fd.vlan_vid(special_vlan_downstream_flow | 0x1000)]))
                 downstream_logical_flow.match.type = OFPMT_OXM
 
                 downstream_logical_flow.instructions.extend(
                     fd.mk_instructions_from_actions([fd.output(
-                        self.platform.mk_uni_port_num(intf_id, onu_id, uni_id))]))
+                        self.platform.mk_uni_port_num(intf_id, onu_id,
+                                                      uni_id))]))
 
-                if self.add_flow_to_device(downstream_flow, downstream_logical_flow):
-                    flow_info = self._get_flow_info_as_json_blob(downstream_flow,
-                                                                 flow_store_cookie)
-                    self.update_flow_info_to_kv_store(downstream_flow.access_intf_id,
-                                                      downstream_flow.onu_id,
-                                                      downstream_flow.uni_id,
-                                                      downstream_flow.flow_id,
-                                                      flow_info)
+                if self.add_flow_to_device(downstream_flow,
+                                           downstream_logical_flow):
+                    flow_info = self._get_flow_info_as_json_blob(
+                        downstream_flow, flow_store_cookie)
+                    self.update_flow_info_to_kv_store(
+                        downstream_flow.access_intf_id, downstream_flow.onu_id,
+                        downstream_flow.uni_id, downstream_flow.flow_id,
+                        flow_info)
 
     def repush_all_different_flows(self):
         # Check if the device is supposed to have flows, if so add them
@@ -766,17 +738,17 @@ class OpenOltFlowMgr(object):
         uni_id = -1
         flow_store_cookie = self._get_flow_store_cookie(classifier)
 
-        if self.resource_mgr.is_flow_cookie_on_kv_store(network_intf_id, onu_id, uni_id,
-                                                            flow_store_cookie):
+        if self.resource_mgr.is_flow_cookie_on_kv_store(
+                network_intf_id, onu_id, uni_id, flow_store_cookie):
             self.log.debug('flow-exists--not-re-adding')
         else:
-            flow_id = self.resource_mgr.get_flow_id(network_intf_id, onu_id, uni_id,
-                                                    flow_store_cookie)
+            flow_id = self.resource_mgr.get_flow_id(
+                network_intf_id, onu_id, uni_id, flow_store_cookie)
 
             downstream_flow = openolt_pb2.Flow(
                 access_intf_id=-1,  # access_intf_id not required
-                onu_id=onu_id, # onu_id not required
-                uni_id=uni_id, # uni_id not used
+                onu_id=onu_id,  # onu_id not required
+                uni_id=uni_id,  # uni_id not used
                 flow_id=flow_id,
                 flow_type=DOWNSTREAM,
                 network_intf_id=network_intf_id,
@@ -788,12 +760,13 @@ class OpenOltFlowMgr(object):
                 cookie=logical_flow.cookie)
 
             self.log.debug('add lldp downstream trap', classifier=classifier,
-                           action=action, flow=downstream_flow, port_no=port_no)
+                           action=action, flow=downstream_flow,
+                           port_no=port_no)
             if self.add_flow_to_device(downstream_flow, logical_flow):
                 flow_info = self._get_flow_info_as_json_blob(downstream_flow,
                                                              flow_store_cookie)
-                self.update_flow_info_to_kv_store(network_intf_id, onu_id, uni_id,
-                                                  flow_id, flow_info)
+                self.update_flow_info_to_kv_store(
+                    network_intf_id, onu_id, uni_id, flow_id, flow_info)
 
     def mk_classifier(self, classifier_info):
 
@@ -803,9 +776,11 @@ class OpenOltFlowMgr(object):
             classifier.eth_type = classifier_info[ETH_TYPE]
         if IP_PROTO in classifier_info:
             classifier.ip_proto = classifier_info[IP_PROTO]
-        if VLAN_VID in classifier_info:
+        if VLAN_VID in classifier_info and \
+                classifier_info[VLAN_VID] != RESERVED_VLAN:
             classifier.o_vid = classifier_info[VLAN_VID]
-        if METADATA in classifier_info:
+        if METADATA in classifier_info and \
+                classifier_info[METADATA] != RESERVED_VLAN:
             classifier.i_vid = classifier_info[METADATA]
         if VLAN_PCP in classifier_info:
             classifier.o_pbits = classifier_info[VLAN_PCP]
@@ -864,11 +839,12 @@ class OpenOltFlowMgr(object):
                     eap_uni_id = self.platform.uni_id_from_port_num(field.port)
 
             if eap_flow:
-                self.log.debug('eap flow detected', onu_id=onu_id, uni_id=uni_id,
-                               intf_id=intf_id, eap_intf_id=eap_intf_id,
-                               eap_onu_id=eap_onu_id,
+                self.log.debug('eap flow detected', onu_id=onu_id,
+                               uni_id=uni_id, intf_id=intf_id,
+                               eap_intf_id=eap_intf_id, eap_onu_id=eap_onu_id,
                                eap_uni_id=eap_uni_id)
-            if eap_flow and intf_id == eap_intf_id and onu_id == eap_onu_id and uni_id == eap_uni_id:
+            if eap_flow and intf_id == eap_intf_id \
+                    and onu_id == eap_onu_id and uni_id == eap_uni_id:
                 return True, flow
 
         return False, None
@@ -909,7 +885,8 @@ class OpenOltFlowMgr(object):
             self.register_flow(logical_flow, flow)
             return True
 
-    def update_flow_info_to_kv_store(self, intf_id, onu_id, uni_id, flow_id, flow):
+    def update_flow_info_to_kv_store(self, intf_id, onu_id, uni_id, flow_id,
+                                     flow):
         self.resource_mgr.update_flow_id_info(intf_id, onu_id, uni_id,
                                               flow_id, flow)
 
@@ -930,10 +907,11 @@ class OpenOltFlowMgr(object):
     def find_next_flow(self, flow):
         table_id = fd.get_goto_table_id(flow)
         metadata = 0
-        # Prior to ONOS 1.13.5, Metadata contained the UNI output port number. In
-        # 1.13.5 and later, the lower 32-bits is the output port number and the
-        # upper 32-bits is the inner-vid we are looking for. Use just the lower 32
-        # bits.  Allows this code to work with pre- and post-1.13.5 ONOS OltPipeline
+        # Prior to ONOS 1.13.5, Metadata contained the UNI output port number.
+        # In 1.13.5 and later, the lower 32-bits is the output port number and
+        # the # upper 32-bits is the inner-vid we are looking for. Use just the
+        # lower 32 # bits.  Allows this code to work with pre- and post-1.13.5
+        # ONOS OltPipeline
 
         for field in fd.get_ofb_fields(flow):
             if field.type == fd.METADATA:
@@ -953,7 +931,8 @@ class OpenOltFlowMgr(object):
             self.log.warning('no next flow found, it may be a timing issue',
                              flow=flow, number_of_flows=len(flows))
             if flow.id in self.retry_add_flow_list:
-                self.log.debug('flow is already in retry list', flow_id=flow.id)
+                self.log.debug('flow is already in retry list',
+                               flow_id=flow.id)
             else:
                 self.retry_add_flow_list.append(flow.id)
                 reactor.callLater(5, self.retry_add_flow, flow)
@@ -972,26 +951,31 @@ class OpenOltFlowMgr(object):
                 self.root_proxy.update('/devices/{}/flow_groups'.format(
                     device_id), FlowGroups(items=groups.values()))
 
-    def clear_flows_and_scheduler_for_logical_port(self, child_device, logical_port):
+    def clear_flows_and_scheduler_for_logical_port(self, child_device,
+                                                   logical_port):
         ofp_port_name = logical_port.ofp_port.name
         port_no = logical_port.ofp_port.port_no
         pon_port = child_device.proxy_address.channel_id
         onu_id = child_device.proxy_address.onu_id
-        uni_id = self.platform.uni_id_from_port_num(logical_port)
+        uni_id = self.platform.uni_id_from_port_num(port_no)
 
         # TODO: The DEFAULT_TECH_PROFILE_ID is assumed. Right way to do,
         # is probably to maintain a list of Tech-profile table IDs associated
-        # with the UNI logical_port. This way, when the logical port is deleted,
-        # all the associated tech-profile configuration with the UNI logical_port
-        # can be cleared.
+        # with the UNI logical_port. This way, when the logical port is
+        # deleted, all the associated tech-profile configuration with the UNI
+        # logical_port can be cleared.
+        tp_id = self.resource_mgr.get_tech_profile_id_for_onu(pon_port, onu_id,
+                                                              uni_id)
         tech_profile_instance = self.tech_profile[pon_port]. \
             get_tech_profile_instance(
-            DEFAULT_TECH_PROFILE_TABLE_ID,
+            tp_id,
             ofp_port_name)
-        flow_ids = self.resource_mgr.get_current_flow_ids(pon_port, onu_id, uni_id)
+        flow_ids = self.resource_mgr.get_current_flow_ids(pon_port, onu_id,
+                                                          uni_id)
         self.log.debug("outstanding-flows-to-be-cleared", flow_ids=flow_ids)
         for flow_id in flow_ids:
-            flow_infos = self.resource_mgr.get_flow_id_info(pon_port, onu_id, uni_id, flow_id)
+            flow_infos = self.resource_mgr.get_flow_id_info(pon_port, onu_id,
+                                                            uni_id, flow_id)
             for flow_info in flow_infos:
                 direction = flow_info['flow_type']
                 flow_to_remove = openolt_pb2.Flow(flow_id=flow_id,
@@ -1000,16 +984,18 @@ class OpenOltFlowMgr(object):
                     self.stub.FlowRemove(flow_to_remove)
                 except grpc.RpcError as grpc_e:
                     if grpc_e.code() == grpc.StatusCode.NOT_FOUND:
-                        self.log.debug('This flow does not exist on the switch, '
+                        self.log.debug('This flow does not exist on switch, '
                                        'normal after an OLT reboot',
                                        flow=flow_to_remove)
                     else:
                         raise grpc_e
 
-                self.resource_mgr.free_flow_id(pon_port, onu_id, uni_id, flow_id)
+                self.resource_mgr.free_flow_id(pon_port, onu_id, uni_id,
+                                               flow_id)
 
         try:
-            tconts = self.tech_profile[pon_port].get_tconts(tech_profile_instance)
+            tconts = self.tech_profile[pon_port].get_tconts(
+                tech_profile_instance)
             self.stub.RemoveTconts(openolt_pb2.Tconts(intf_id=pon_port,
                                                       onu_id=onu_id,
                                                       uni_id=uni_id,
@@ -1044,7 +1030,8 @@ class OpenOltFlowMgr(object):
 
         # Make sure we have as many tech_profiles as there are pon ports on
         # the device
-        assert len(self.tech_profile) == self.resource_mgr.device_info.pon_ports
+        assert len(self.tech_profile) \
+            == self.resource_mgr.device_info.pon_ports
 
     def _get_flow_info_as_json_blob(self, flow, flow_store_cookie,
                                     flow_category=None):
@@ -1055,18 +1042,17 @@ class OpenOltFlowMgr(object):
         if flow_category is not None:
             json_blob['flow_category'] = flow_category
 
-        # For flows which trap out of the NNI, the access_intf_id is invalid (set to -1).
-        # In such cases, we need to refer to the network_intf_id.
+        # For flows which trap out of the NNI, the access_intf_id is invalid
+        # (set to -1). In such cases, we need to refer to the network_intf_id.
         if flow.access_intf_id != -1:
-            flow_info = self.resource_mgr.get_flow_id_info(flow.access_intf_id,
-                                                           flow.onu_id, flow.uni_id,
-                                                           flow.flow_id)
+            flow_info = self.resource_mgr.get_flow_id_info(
+                flow.access_intf_id, flow.onu_id, flow.uni_id, flow.flow_id)
         else:
-            # Case of LLDP trap flow from the NNI. We can't use flow.access_intf_id
-            # in that case, as it is invalid. We use flow.network_intf_id.
-            flow_info = self.resource_mgr.get_flow_id_info(flow.network_intf_id,
-                                                           flow.onu_id, flow.uni_id,
-                                                           flow.flow_id)
+            # Case of LLDP trap flow from the NNI. We can't use
+            # flow.access_intf_id in that case, as it is invalid.
+            # We use flow.network_intf_id.
+            flow_info = self.resource_mgr.get_flow_id_info(
+                flow.network_intf_id, flow.onu_id, flow.uni_id, flow.flow_id)
 
         if flow_info is None:
             flow_info = list()
@@ -1086,15 +1072,3 @@ class OpenOltFlowMgr(object):
         else:
             to_hash = dumps(classifier, sort_keys=True)
         return hashlib.md5(to_hash).hexdigest()[:12]
-
-    def get_nni_intf_id(self):
-        if self.nni_intf_id is not None:
-            return self.nni_intf_id
-
-        port_list = self.adapter_agent.get_ports(self.device_id, Port.ETHERNET_NNI)
-        logical_port = self.adapter_agent.get_logical_port(self.logical_device_id,
-                                                           port_list[0].label)
-        self.nni_intf_id = self.platform.intf_id_from_nni_port_num(logical_port.ofp_port.port_no)
-        self.log.debug("nni-intf-d ", nni_intf_id=self.nni_intf_id)
-        return self.nni_intf_id
-
