@@ -229,6 +229,10 @@ class BrcmOpenomciOnuHandler(object):
             # Note, ONU ID and UNI intf set in add_uni_port method
             self._onu_omci_device.alarm_synchronizer.set_alarm_params(mgr=self.alarms,
                                                                       ani_ports=[self._pon])
+
+            # Start collecting stats from the device after a brief pause
+            reactor.callLater(10, self.pm_metrics.start_collector)
+
             self.enabled = True
         else:
             self.log.info('onu-already-activated')
@@ -382,7 +386,6 @@ class BrcmOpenomciOnuHandler(object):
             self.log.debug('pon-add-gemport', gem_port=gem_port)
 
     def _do_tech_profile_configuration(self, uni_id, tp):
-        num_of_tconts = tp['num_of_tconts']
         us_scheduler = tp['us_scheduler']
         alloc_id = us_scheduler['alloc_id']
         self._create_tconts(uni_id, us_scheduler)
