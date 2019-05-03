@@ -26,7 +26,7 @@ import grpc
 import json
 import copy
 import structlog
-from scapy.layers.l2 import Ether, Dot1Q
+from scapy.layers.l2 import Ether, Dot1Q, Dot1AD
 from scapy.layers.inet import IP, Raw
 from twisted.internet import reactor
 from twisted.internet.defer import inlineCallbacks
@@ -618,11 +618,19 @@ class PonSimOltHandler(object):
         pkt = Ether(frame)
         self.log.info('received packet', pkt=pkt)
         if pkt.haslayer(Dot1Q):
-            outer_shim = pkt.getlayer(Dot1Q)
+            if pkt.haslayer(Dot1AD):
+                outer_shim = pkt.getlayer(Dot1AD)
+            else:
+                outer_shim = pkt.getlayer(Dot1Q)
 
             if pkt.haslayer(IP) or outer_shim.type == EAP_ETH_TYPE:
-                cvid = outer_shim.vlan
-                logical_port = self.get_subscriber_uni_port(cvid)
+                # We don't have any context about the packet at this point.
+                # Assume that only downstream traffic is double-tagged.
+                if isinstance(outer_shim.payload, Dot1Q):
+                    logical_port = int(self.nni_port.port_no)
+                else:
+                    cvid = outer_shim.vlan
+                    logical_port = self.get_subscriber_uni_port(cvid)
                 popped_frame = (
                         Ether(src=pkt.src, dst=pkt.dst, type=outer_shim.type) /
                         outer_shim.payload
@@ -751,6 +759,7 @@ class PonSimOltHandler(object):
         dhcp_upstream_flows = {}
         eapol_flows = {}
         secondary_flows = []
+        eapol_flow_without_vlan = False
 
         for flow in flows:
             classifier_info = {}
@@ -803,11 +812,27 @@ class PonSimOltHandler(object):
                     self.to_controller(flow)
                     if VLAN_VID in classifier_info:
                         eapol_flows[classifier_info[VLAN_VID]] = flow
+                    else:
+                        eapol_flow_without_vlan = True
 
             self.log.info('out_port', out_port=fd.get_out_port(flow))
 
         flows.extend(self.create_secondary_flows(dhcp_upstream_flows, flows, "DHCP"))
         flows.extend(self.create_secondary_flows(eapol_flows, flows, "EAPOL"))
+
+        # The OLT app is now adding EAPOL flows with VLAN_VID=4091 but Ponsim can't
+        # properly handle this because it uses VLAN_VID to encode the UNI port ID.
+        # Add an EAPOL trap flow with no VLAN_VID match if we see the 4091 match.
+        if 4091 in eapol_flows and not eapol_flow_without_vlan:
+            new_eapol_flow = [
+                fd.mk_flow_stat(
+                    priority=10000,
+                    match_fields=[fd.in_port(1), fd.eth_type(EAP_ETH_TYPE)],
+                    actions=[fd.output(ofp.OFPP_CONTROLLER)]
+                )
+            ]
+            flows.extend(new_eapol_flow)
+            self.log.info('add eapol flow with no VLAN_VID match')
 
         self.log.debug('ctag_map', ctag_map=self.ctag_map)
 
@@ -856,15 +881,19 @@ class PonSimOltHandler(object):
         if egress_port != self.nni_port.port_no:
             # don't do the vlan manipulation for the NNI port, vlans are already correct
             if pkt.haslayer(Dot1Q):
-                # For QinQ-tagged packets from ONOS:
-                # - Outer header is 802.1AD
-                # - Inner header is 802.1Q
-                # - Send inner header and payload
-                payload = pkt.getlayer(Dot1Q)
-                out_pkt = (
-                    Ether(src=pkt.src, dst=pkt.dst) /
-                    payload
-                )
+                if pkt.haslayer(Dot1AD):
+                    outer_shim = pkt.getlayer(Dot1AD)
+                else:
+                    outer_shim = pkt.getlayer(Dot1Q)
+                if isinstance(outer_shim.payload, Dot1Q):
+                    # If double tag, remove the outer tag
+                    out_pkt = (
+                            Ether(src=pkt.src, dst=pkt.dst,
+                                  type=outer_shim.type) /
+                            outer_shim.payload
+                    )
+                else:
+                    out_pkt = pkt
             else:
                 # Add egress port as VLAN tag
                 out_pkt = (

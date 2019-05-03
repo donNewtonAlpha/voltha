@@ -23,7 +23,8 @@ HELM_PLATFORM   ?= "linux-amd64"
 
 KAFKA_CHART_VERSION  ?= 0.8.8
 
-/all: $(M)/voltha_ponsim_running
+ponsim: $(M)/voltha-running $(M)/adapter-ponsim $(M)/voltha-adapter-running
+bbsim:  $(M)/voltha-running $(M)/adapter-bbsim $(M)/voltha-adapter-running
 
 $(M)/setup: 
 	echo "MYDIR = ${MYDIR}"
@@ -44,7 +45,7 @@ $(M)/setup:
 	echo "deb http://apt.kubernetes.io/ kubernetes-xenial main" > /tmp/kubernetes.list
 	sudo cp /tmp/kubernetes.list /etc/apt/sources.list.d/kubernetes.list
 	sudo apt update
-	sudo apt install -y "kubeadm=1.11.3-*" "kubelet=1.11.3-*" "kubectl=1.11.3-*"
+	sudo apt install -y "kubeadm=1.12.7-*" "kubelet=1.12.7-*" "kubectl=1.12.7-*"
 
 /usr/local/bin/helm:
 	curl -L -o /tmp/helm.tgz "https://storage.googleapis.com/kubernetes-helm/helm-v${HELM_VERSION}-${HELM_PLATFORM}.tar.gz"
@@ -58,7 +59,8 @@ $(M)/kubeadm: | $(M)/setup /usr/bin/kubeadm
 	mkdir -p $(HOME)/.kube
 	sudo cp -f /etc/kubernetes/admin.conf $(HOME)/.kube/config
 	sudo chown $(id -u):$(id -g) $(HOME)/.kube/config
-	kubectl apply -f https://docs.projectcalico.org/v2.6/getting-started/kubernetes/installation/hosted/kubeadm/1.6/calico.yaml
+	kubectl apply -f https://docs.projectcalico.org/v3.3/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml
+	kubectl apply -f https://docs.projectcalico.org/v3.3/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml
 	kubectl taint nodes --all node-role.kubernetes.io/master-
 	touch $@
 
@@ -110,13 +112,19 @@ $(M)/voltha-running: | $(M)/voltha
 	$(HOME)/cord/helm-charts/scripts/wait_for_pods.sh voltha
 	touch $@
 
-$(M)/ponsim: | $(M)/voltha-running
+$(M)/adapter-bbsim: | $(M)/voltha-running
+	cd $(HOME)/cord/helm-charts; helm upgrade --install ponnet ponnet
+	$(HOME)/cord/helm-charts/scripts/wait_for_pods.sh kube-system
+	cd $(HOME)/cord/helm-charts; helm upgrade --install bbsim bbsim -f configs/seba-ponsim.yaml --set images.bbsim.repository=voltha/voltha-bbsim,images.bbsim.tag=latest,images.bbsim.pullPolicy=Never
+	touch $@
+
+$(M)/adapter-ponsim: | $(M)/voltha-running
 	cd $(HOME)/cord/helm-charts; helm upgrade --install ponnet ponnet
 	$(HOME)/cord/helm-charts/scripts/wait_for_pods.sh kube-system
 	cd $(HOME)/cord/helm-charts; helm upgrade --install ponsimv2 ponsimv2 -f configs/seba-ponsim.yaml --set images.olt.repository=voltha-ponsim,images.olt.tag=latest,images.olt.pullPolicy=Never,images.onu.repository=voltha-ponsim,images.onu.tag=latest,images.onu.pullPolicy=Never,images.rg.repository=voltha-tester,images.rg.tag=latest,images.rg.pullPolicy=Never
 	touch $@
 
-$(M)/pon0_fwd: | $(M)/ponsim
+$(M)/pon0-fwd: | $(M)/voltha-running
 	echo 8 > /tmp/pon0_group_fwd_mask
 	until sudo cp /tmp/pon0_group_fwd_mask /sys/class/net/pon0/bridge/group_fwd_mask; \
 	do \
@@ -126,7 +134,7 @@ $(M)/pon0_fwd: | $(M)/ponsim
 	rm /tmp/pon0_group_fwd_mask
 	touch $@
 	
-$(M)/voltha_ponsim_running: | $(M)/pon0_fwd
+$(M)/voltha-adapter-running: | $(M)/pon0-fwd
 	$(HOME)/cord/helm-charts/scripts/wait_for_pods.sh
 	until http -a karaf:karaf --ignore-stdin --check-status GET http://127.0.0.1:30120/onos/v1/configuration/org.opencord.olt.impl.Olt; \
 	do \
@@ -138,39 +146,18 @@ $(M)/voltha_ponsim_running: | $(M)/pon0_fwd
 	touch $@
 	echo "Voltha Test Framework Ready!"
 
-$(M)/authenticate: $(M)/voltha_ponsim_running
-	timeout 60s bash -c "until http -a admin@opencord.org:letmein GET http://127.0.0.1:30001/xosapi/v1/att-workflow-driver/attworkflowdriverserviceinstances |jq '.items[0].authentication_state'|grep AWAITING; do echo 'waiting for att-workflow-driver to be in AWAITING state'; sleep 5; done"
-	kubectl -n voltha exec $(shell kubectl -n voltha get pod|grep "^rg-"|cut -d' ' -f1) -- wpa_supplicant -i eth0 -Dwired -c /etc/wpa_supplicant/wpa_supplicant.conf -B
-	timeout 60s bash -c "until http -a admin@opencord.org:letmein GET http://127.0.0.1:30001/xosapi/v1/att-workflow-driver/attworkflowdriverserviceinstances |jq '.items[0].authentication_state'|grep APPROVED; do echo 'waiting for att-workflow-driver to be in APPROVED state'; sleep 5; done"
-	touch $@
-	
-$(M)/dhclient: $(M)/authenticate
-	sudo iptables -P FORWARD ACCEPT
-	timeout 60s bash -c "until http -a admin@opencord.org:letmein GET http://127.0.0.1:30001/xosapi/v1/fabric-crossconnect/fabriccrossconnectserviceinstances |jq '.items[0].backend_status'|grep OK; do echo 'waiting for fabric-crossconnect to be synchronized';sleep 5; done"
-	kubectl -n voltha exec $(shell kubectl -n voltha get pod|grep "^rg-"|cut -d' ' -f1) -- dhclient
-	kubectl -n voltha exec $(shell kubectl -n voltha get pod|grep "^rg-"|cut -d' ' -f1) -- dhclient -r
-	kubectl -n voltha exec $(shell kubectl -n voltha get pod|grep "^rg-"|cut -d' ' -f1) -- dhclient
-	touch $@
-
-$(M)/pingtest: $(M)/dhclient
-	kubectl -n voltha exec $(shell kubectl -n voltha get pod|grep "^rg-"|cut -d' ' -f1) -- ping -c 3 172.18.0.10
-	touch $@
-
-run-tests: $(M)/pingtest
-
 remove-chart-milestones:
 	cd $(M); sudo rm -f setup kafka kafka-running onos voltha etcd-operator-ready etcd-cluster \
-		voltha-running ponsim pon0_fwd voltha_ponsim_running
+		voltha-running adapter-ponsim adapter-bbsim pon0-fwd voltha-adapter-running
 remove-kube-milestones:
 	cd $(M); sudo rm -f kubeadm helm-init
-
-remove-test-milestones:
-	cd $(M); sudo rm -f authenticate dhclient pingtest
 
 teardown-charts: remove-chart-milestones
 	helm delete --purge $(shell helm ls -q)
 
 reset-kubeadm: remove-chart-milestones remove-kube-milestones
-	sudo kubeadm reset -f
+	sudo kubeadm reset -f || true
 	sudo iptables -F && sudo iptables -t nat -F && sudo iptables -t mangle -F && sudo iptables -X
-
+	sudo rm -f /var/lib/cni/networks/pon0/* || true
+	sudo rm -f /var/lib/cni/networks/pon1/* || true
+	sudo rm -f /var/lib/cni/networks/k8s-pod-network/* || true
