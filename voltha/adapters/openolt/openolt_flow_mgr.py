@@ -508,7 +508,7 @@ class OpenOltFlowMgr(object):
         elif POP_VLAN in action:
             if VLAN_PCP in classifier:
                 gemport_id = self._get_gem_port_for_pcp(
-                    classifier[VLAN_PCP], us_gem_port_attr_list
+                    classifier[VLAN_PCP], ds_gem_port_attr_list
                 )
                 self.add_downstream_data_flow(intf_id, onu_id, uni_id, port_no, classifier,
                                               action, flow, alloc_id, gemport_id)
@@ -1101,7 +1101,11 @@ class OpenOltFlowMgr(object):
                 self.log.exception('Problem reading this flow', e=e)
 
     def reset_flows(self):
-        self.flows_proxy.update('/', Flows())
+        self.flows_proxy.update('/', Flows(items=[]))
+        self.log.debug("purged-all-device-flows")
+
+        self.logical_flows_proxy.update('/', Flows(items=[]))
+        self.log.debug("purged-all-logical-flows")
 
     """ Add a downstream DHCP trap flow on the NNI interface
     """
@@ -1325,6 +1329,14 @@ class OpenOltFlowMgr(object):
                 self.log.error('failed to add flow',
                                logical_flow=logical_flow, flow=flow,
                                grpc_error=grpc_e)
+                # If the flow addition failed on the device, immediately
+                # free up the flow_id resource from the pool
+                intf_id = flow.access_intf_id if flow.access_intf_id > 0 else flow.network_intf_id
+                onu_id = flow.onu_id
+                uni_id = flow.uni_id
+                flow_id = flow.flow_id
+                self.resource_mgr.free_flow_id(intf_id, onu_id, uni_id, flow_id)
+
             return False
         else:
             self.register_flow(logical_flow, flow)
